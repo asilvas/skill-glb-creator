@@ -1,0 +1,7 @@
+* text=auto
+.gitattributes text eol=lf
+.gitignore text eol=lf
+*.ts text eol=lf
+*.md text eol=lf
+*.json text eol=lf
+bun.lock text eol=lf

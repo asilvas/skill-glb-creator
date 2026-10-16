@@ -1,0 +1,35 @@
+{
+  "name": "@asilvas/glb-creator",
+  "version": "0.1.0",
+  "description": "Bun GLB authoring and memory-first previews for coding agents",
+  "license": "MIT",
+  "type": "module",
+  "engines": {
+    "bun": ">=1.4.4-0"
+  },
+  "overrides": {
+    "sharp": "0.34.5"
+  },
+  "dependencies": {
+    "@gltf-transform/core": "4.5.1",
+    "@gltf-transform/functions": "4.5.1",
+    "@headless-three/renderer": "0.4.5",
+    "three": "0.184.0",
+    "sharp": "0.34.5",
+    "gltf-validator": "2.0.0-dev.3.10"
+  },
+  "exports": {
+    ".": "./scripts/index.ts",
+    "./geometry": "./scripts/geometry.ts",
+    "./preview": "./scripts/preview.ts",
+    "./validate": "./scripts/validate.ts"
+  },
+  "scripts": {
+    "setup": "bun scripts/setup.ts",
+    "preview": "bun scripts/preview.ts",
+    "frame": "bun scripts/frame.ts",
+    "clean": "bun scripts/clean.ts",
+    "check": "bun scripts/skill-check.ts",
+    "test": "bun test ./tests/core.test.ts ./tests/cleanup.test.ts"
+  }
+}

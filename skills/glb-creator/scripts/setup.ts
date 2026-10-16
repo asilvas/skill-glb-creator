@@ -1,0 +1,11 @@
+import { mkdirSync } from 'node:fs';
+import { resolve } from 'node:path';
+import { scheduleCleanup } from './cleanup';
+const root = resolve(import.meta.dir, '..');
+mkdirSync(resolve(root,'tmp'), {recursive:true});
+const manifest=await Bun.file(resolve(root,'package.json')).json();
+const start=performance.now();
+const p=Bun.spawn([process.execPath,'install','--cwd',root],{cwd:root,stdout:'inherit',stderr:'inherit',env:{...process.env,BUN_INSTALL_CACHE_DIR:resolve(root,'tmp/cache')}});
+const code=await p.exited;
+await Bun.write(resolve(root,'tmp/setup.json'),JSON.stringify({seconds:(performance.now()-start)/1000,exitCode:code,manifest},null,2));
+if(code===0)scheduleCleanup();process.exit(code);

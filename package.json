@@ -1,0 +1,44 @@
+{
+  "name": "@asilvas/glb-creator",
+  "version": "0.1.0",
+  "description": "Bun GLB authoring and memory-first previews for coding agents",
+  "license": "MIT",
+  "type": "module",
+  "engines": {
+    "bun": ">=1.4.4-0"
+  },
+  "overrides": {
+    "sharp": "0.34.5"
+  },
+  "dependencies": {
+    "@gltf-transform/core": "4.5.1",
+    "@gltf-transform/functions": "4.5.1",
+    "@headless-three/renderer": "0.4.5",
+    "three": "0.184.0",
+    "sharp": "0.34.5",
+    "gltf-validator": "2.0.0-dev.3.10"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/asilvas/skill-glb-creator.git"
+  },
+  "files": [
+    "skills/glb-creator/",
+    "README.md",
+    "LICENSE"
+  ],
+  "exports": {
+    ".": "./skills/glb-creator/scripts/index.ts",
+    "./geometry": "./skills/glb-creator/scripts/geometry.ts",
+    "./preview": "./skills/glb-creator/scripts/preview.ts",
+    "./validate": "./skills/glb-creator/scripts/validate.ts"
+  },
+  "scripts": {
+    "setup": "bun skills/glb-creator/scripts/setup.ts",
+    "preview": "bun skills/glb-creator/scripts/preview.ts",
+    "frame": "bun skills/glb-creator/scripts/frame.ts",
+    "clean": "bun skills/glb-creator/scripts/clean.ts",
+    "check": "bun skills/glb-creator/scripts/skill-check.ts",
+    "test": "bun test ./skills/glb-creator/tests/core.test.ts ./skills/glb-creator/tests/cleanup.test.ts"
+  }
+}

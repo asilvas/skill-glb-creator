@@ -1,0 +1,1 @@
+Maintain the installable skill in skills/glb-creator/. Use Bun. Keep scripts reusable and scratch work in ignored tmp/. Run bun run test and bun run check before finishing. The monster benchmark belongs in the separate demo repository. Do not push unless asked.
