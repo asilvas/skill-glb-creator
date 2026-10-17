@@ -27,6 +27,31 @@ test('memory frames show deformation, repeat absolute times and return to rest',
   const p=await Preview.create(),before=readdirSync(TMP,{recursive:true}).sort();
   try{await p.load(await fixture());const rest=await p.frame({size:128,time:0,analyze:true}),attack=await p.frame({size:128,time:.4}),end=await p.frame({size:128,time:.8});expect(rest.stats!.channels[0].stdev).toBeGreaterThan(5);expect(attack.bytes).not.toEqual(rest.bytes);expect(end.bytes).toEqual(rest.bytes);expect((await p.frame({size:128,time:.4})).bytes).toEqual(attack.bytes);expect(readdirSync(TMP,{recursive:true}).sort()).toEqual(before);}finally{await p.dispose();}
 },30000);
+test('scale resizes geometry and skeleton together; invalid tint fails early',async()=>{
+  const a=new Asset();a.joint('root',[0,0,0]);a.joint('arm',[.5,1,0],'root');
+  a.ell('m',[0,.7,0],[.45,.7,.4],'root');a.scale(2);
+  const d=await new NodeIO().readBinary(await a.bytes());
+  expect(d.getRoot().listSkins()[0].listJoints()[1].getTranslation()).toEqual([1,2,0]);
+  const bad=new Asset();bad.joint('root',[0,0,0]);bad.ell('m',[0,.7,0],[.4,.6,.4],'root');
+  bad.surfaces.set('m',{baseColor:new Uint8Array([137,80,78,71]),tint:[1.4,1,1]});
+  await expect(bad.bytes()).rejects.toThrow('0..1');
+});
+test('tube interpolates short radii lists along the path',async()=>{
+  const a=new Asset();a.joint('root',[0,0,0]);
+  a.tube('m',[[0,0,0],[0,1,0],[0,2,0],[0,3,0],[0,4,0]],[.4,.1],'root');
+  expect((await validate(await a.bytes())).errors).toBe(0);
+});
+test('contact sheet tiles cover rest views and animation phases in one image',async()=>{
+  const p=await Preview.create();
+  try{
+    await p.load(await fixture());
+    const s=await p.sheet({tile:96});
+    expect(s.tiles.length).toBe(6);expect(s.width).toBe(288);expect(s.height).toBe(192);
+    expect(s.tiles.map(t=>t.label)).toEqual(['front','left','back','t=0.24s','t=0.44s','t=0.68s']);
+    expect(s.tiles.every(t=>!t.blank)).toBe(true);
+    const meta=await sharp(s.bytes).metadata();expect(meta.format).toBe('webp');
+  }finally{await p.dispose();}
+},30000);
 test('capture is confined and actual custom shader hooks remain rejected',async()=>{
   expect(()=>capturePath('../SKILL.md')).toThrow();expect(capturePath('history/a.png')).toBe(resolve(TMP,'history/a.png'));
   const p=await Preview.create();try{await p.load(await fixture());p.scene.traverse((o:any)=>{if(o.material)o.material.onBeforeCompile=()=>{throw Error('custom');};});await expect(p.frame({size:64})).rejects.toThrow();}finally{await p.dispose();}

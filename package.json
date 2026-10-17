@@ -35,6 +35,7 @@
   },
   "scripts": {
     "setup": "bun skills/glb-creator/scripts/setup.ts",
+    "dev": "bun skills/glb-creator/scripts/dev.ts",
     "preview": "bun skills/glb-creator/scripts/preview.ts",
     "frame": "bun skills/glb-creator/scripts/frame.ts",
     "clean": "bun skills/glb-creator/scripts/clean.ts",

@@ -26,6 +26,7 @@
   },
   "scripts": {
     "setup": "bun scripts/setup.ts",
+    "dev": "bun scripts/dev.ts",
     "preview": "bun scripts/preview.ts",
     "frame": "bun scripts/frame.ts",
     "clean": "bun scripts/clean.ts",

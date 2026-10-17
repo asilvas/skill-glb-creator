@@ -1,4 +1,4 @@
-import { Document,NodeIO,Accessor } from '@gltf-transform/core';
+import { Document,NodeIO,Accessor,Logger } from '@gltf-transform/core';
 import { dedup,prune,weld } from '@gltf-transform/functions';
 import * as T from 'three';
 import { scheduleCleanup } from './cleanup';
@@ -12,7 +12,7 @@ export class Asset {
   doc=new Document();buffer=this.doc.createBuffer();scene=this.doc.createScene('asset');
   joints:Joint[]=[];nodes=new Map<string,any>();batches=new Map<string,Batch>();
   surfaces=new Map<string,Surface>();
-  constructor(){this.doc.getRoot().setDefaultScene(this.scene);}
+  constructor(){this.doc.getRoot().setDefaultScene(this.scene);this.doc.setLogger(new Logger(Logger.Verbosity.ERROR));}
   joint(name:string,at:V,parent?:string){
     if(this.nodes.has(name)||parent&&!this.nodes.has(parent))throw Error(`Invalid joint ${name}`);
     const n=this.doc.createNode(name);const p=this.joints.find(j=>j.name===parent)?.at??[0,0,0];
@@ -73,7 +73,12 @@ export class Asset {
     this.add(mat,bone,p,f,rock,uv);
   }
   tube(mat:string,points:V[],radii:number[],bone:string,sides=7){
-    if(points.length!==radii.length||points.length<2)throw Error('Tube requires matching paths and radii');
+    if(points.length<2||!radii.length)throw Error('Tube requires at least two points and one radius');
+    // Fewer radii than points is fine: interpolate along the path (e.g. [base, tip]).
+    if(radii.length!==points.length){
+      const src=radii;
+      radii=points.map((_,i)=>{if(src.length===1)return src[0];const t=i/(points.length-1)*(src.length-1),k=Math.min(src.length-2,Math.floor(t));return src[k]+(src[k+1]-src[k])*(t-k);});
+    }
     const p:V[]=[],f:number[][]=[],uv:[number,number][]=[];let distance=0;
     for(let j=0;j<points.length;j++){
       const t=new T.Vector3(...points[Math.min(j+1,points.length-1)]).sub(new T.Vector3(...points[Math.max(0,j-1)])).normalize();
@@ -101,7 +106,21 @@ export class Asset {
     clip.addSampler(sampler).addChannel(this.doc.createAnimationChannel().setTargetNode(this.nodes.get(bone)).setTargetPath('rotation').setSampler(sampler));
   }
   access(type:string,array:Float32Array|Uint16Array|Uint32Array){return this.doc.createAccessor().setType(type as any).setArray(array).setBuffer(this.buffer);}
+  scaleFactor=1;
+  /** Uniformly resize the whole asset (geometry, joints, bind poses) at export. */
+  scale(factor:number){if(!Number.isFinite(factor)||factor<=0)throw Error('scale factor must be positive');this.scaleFactor=factor;return this;}
   async bytes(){
+    for(const [name,s] of this.surfaces){
+      if(s.tint&&s.tint.some(c=>c<0||c>1))throw Error(`Surface "${name}": tint components must be within 0..1 (glTF baseColorFactor range)`);
+      if(s.alphaCutoff!==undefined&&(s.alphaCutoff<0||s.alphaCutoff>1))throw Error(`Surface "${name}": alphaCutoff must be within 0..1`);
+    }
+    if(this.scaleFactor!==1){
+      const f=this.scaleFactor;
+      for(const b of this.batches.values())for(let i=0;i<b.p.length;i++)b.p[i]*=f;
+      for(const j of this.joints)j.at=j.at.map(x=>x*f) as V;
+      for(const j of this.joints){const p=this.joints.find(q=>q.name===j.parent)?.at??[0,0,0];this.nodes.get(j.name).setTranslation(j.at.map((x,i)=>x-p[i]) as V);}
+      this.scaleFactor=1;
+    }
     // Rebase the complete bind pose, including joints and inverse binds, onto ground.
     let minimum=Infinity;for(const b of this.batches.values())for(let i=1;i<b.p.length;i+=3)minimum=Math.min(minimum,b.p[i]);
     const lift=Math.max(0,-minimum);

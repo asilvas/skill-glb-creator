@@ -1,54 +1,125 @@
 ---
 name: glb-creator
-description: Build textured, skinned GLB assets with Bun and glTF Transform, and inspect fast in-memory animation and turntable previews. Use for direct procedural 3D asset authoring and iteration.
+description: Create textured, rigged, animated 3D GLB assets procedurally with Bun — no Blender. One command builds, validates, and renders a labeled multi-view contact sheet for fast visual iteration. Use for 3D asset authoring, iteration, and inspection.
 ---
 
-# GLB creator
+# glb-creator
 
-## Setup and scratch work
+Author GLB assets in TypeScript and see every revision in one image. The whole loop is two tool calls per revision: edit the recipe, run `dev`, read the sheet. **This file contains the complete API — do not read the `scripts/` sources.**
 
-Run `bun run setup` from this skill's folder. It installs pinned packages into ignored `node_modules/`, with the installation cache under ignored `tmp/`. Bun is required; Blender is not required by this skill.
+## Setup (once)
 
-Keep `scripts/` for reusable tools. Write asset-specific recipes, temporary inputs, GLBs, logs and optional captures under `tmp/`. Move accepted deliverables to the user's chosen destination before cleanup. Reference images and textures are supplied inputs; image generation is outside this skill.
-
-## Build toward the reference
-
-Inspect the reference first. Identify silhouette, proportions, asymmetry, connected surfaces, material regions, and animation anticipation, impact and recovery. Set a visual target before comparing time or tokens. A textured blockout still needs anatomical and silhouette iteration.
-
-From `tmp/your-asset.ts`, import `Asset` from `../scripts/geometry`. It supplies world-space triangle batches, bevelled plates, ellipsoids, curved tubes, joints, inverse bind matrices, and quaternion animation channels. Coordinates are **metres, Y up, +Z forward**, quaternions XYZW. Add parents before children and wind triangles outward. Each convenience shape is assigned to one joint; use explicit weights for blended deformation. Animation times must strictly increase.
-
-`Asset.surfaces` maps material names to `{baseColor, normal?, roughness?, normalScale?, tint?, alphaCutoff?}` byte inputs. Albedo is sRGB; normal and packed metallic/roughness maps are linear, with roughness in G and metallic in B. Embed PNG/JPEG maps and author UVs. Keep smooth root tangents continuous and hard stone normals distinct. Inspect seams, caps and alpha cutouts. Normals approximated from albedo are not equivalent to authored height or scanned normals.
-
-`await asset.bytes()` returns GLB bytes without writing a file. Use a fresh builder per revision. Export welds, deduplicates and prunes resources, and lifts below-ground bind geometry with its joints. `Asset.doc` exposes glTF Transform for richer materials, custom weights, morphs and hierarchy. For features beyond the helpers, use a glTF Transform `Document` directly and consult [its API](https://gltf-transform.dev/). Apply compression only when the target consumer supports its decoder, then revalidate appearance and motion.
-
-## Preview in memory
-
-```ts
-// In tmp/your-asset.ts; buildAsset is your own recipe.
-import { Preview } from '../scripts/preview';
-const preview = await Preview.create();
-try {
-  await preview.load(await buildAsset());
-  const frame = await preview.frame({
-    time: 0.47, yaw: -0.38, size: 256, format: 'webp', analyze: true
-  });
-  // Forward frame.bytes directly to the host's image-display tool.
-  // frame.stats and frame.timing are ordinary data.
-} finally { await preview.dispose(); }
+```sh
+bun run setup   # from this skill folder; installs pinned deps (skip if node_modules/ exists)
 ```
 
-Reuse one renderer across revisions and poses. `load` decodes embedded maps from GLB bytes and caches sampled whole-clip bounds. `frame` samples absolute seconds; `framing:'pose'` fits a closer single pose. Inspect front/side/back, grounding, animation phases, joint connections and recovery. Statistics can detect blank frames; judge likeness by visually comparing the rendered image with the reference.
+## The iteration loop
 
-Default output is PNG bytes in memory. WebP reduces image transport size; JPEG and raw RGBA are also supported. `capture:'history/pose.png'` explicitly writes under `tmp/`; record dimensions for raw captures. Do not print base64 into model context: forward bytes inside tool orchestration to an image emitter. Save history selectively.
+1. Write/edit a recipe at `tmp/<asset>.ts` (skeleton below).
+2. `bun run dev -- tmp/<asset>.ts` — builds, validates (Khronos), writes `tmp/<asset>.glb` and a contact sheet `tmp/<asset>-sheet.webp`, prints one JSON summary line.
+3. **View the sheet with your image file reader** (e.g. Read tool). Judge it against the reference, fix the recipe, repeat.
 
-For persistent tool access, run `bun run preview -- tmp/your-asset.glb --serve` from the skill folder, or pass an absolute GLB path. Read `tmp/preview-server.json`. The loopback service serializes GPU work: POST `/asset` accepts GLB bytes, `/frame` accepts frame options and returns image bytes, and `/analyze` returns statistics and timings. `bun run frame -- 0.47` emits a 256px WebP transport envelope over stdout. Stop the exact receipt PID after use.
+Never print GLB bytes or image base64 into your context. The JSON summary plus the sheet image is everything you need.
 
-The native renderer supports embedded PBR maps, alpha masks, skins, shadows and the first animation clip. Multiple-clip selection is not implemented. Actual custom shader hooks fail explicitly. The adapter only removes Three's unchanged empty prototype hook to accommodate Bun's comment stripping. Platform/native binding compatibility must be tested after dependency changes.
+## Recipe skeleton (complete and working)
 
-## Validate, retain and clean
+```ts
+// tmp/creature.ts
+import { Asset, type V } from '../scripts/geometry';
 
-Run `bun run test` and `bun run check`. Import `validate` from `scripts/validate.ts` for Khronos diagnostics and texture, skin and clip inventories. Check evaluated deformation, return pose, framing and actual texture readers; validate target application import rules separately.
+export default async function build() {
+  const a = new Asset();
 
-Setup, successful export and load automatically dispatch a detached, hidden background cleanup worker at most daily. It removes regular files older than **seven days** under `tmp/`, prunes stale empty directories, skips links and preserves live preview receipts. It does not wait in the render path. Retain wanted work outside `tmp/`; root dependencies survive. `GLB_CREATOR_TMP` can select a dedicated caller-owned scratch directory. Set it before importing the skill. `GLB_CREATOR_CLEANUP=off` disables dispatch for controlled measurements. `bun run clean` previews expiry; `--apply` deletes or `--background` dispatches now.
+  // Skeleton: add parents before children. First joint is the root.
+  a.joint('Root', [0, 0, 0]);
+  a.joint('Chest', [0, 1.4, 0], 'Root');
+  a.joint('Head', [0, 2.2, .1], 'Chest');
+  a.joint('ArmL', [-.7, 2.0, 0], 'Chest');
 
-Report runtime, setup/development overhead, artifact bytes, visual quality and token cost separately. The [standalone demo](https://github.com/asilvas/skill-glb-creator-codex-demo) records one host's runtime advantage and renderer comparison. Source token counts are a proxy; general agent-token savings and matched-reference quality are not established.
+  // Optional PBR textures per material name (otherwise palette/gray fallback).
+  a.surfaces.set('skin', {
+    baseColor: new Uint8Array(await Bun.file('path/to/albedo.jpg').arrayBuffer()),
+    normal: new Uint8Array(await Bun.file('path/to/normal.png').arrayBuffer()),      // optional
+    roughness: new Uint8Array(await Bun.file('path/to/roughness.png').arrayBuffer()),// optional, G channel
+    normalScale: .7,            // optional
+    // tint: [1,.9,.8],         // optional albedo multiplier
+    // alphaCutoff: .4,         // optional alpha-mask cutout
+  });
+
+  // Geometry: each call binds fully to one bone.
+  a.ell('skin', [0, 1.4, 0], [.55, .8, .45], 'Chest');          // torso ellipsoid
+  a.ell('skin', [0, 2.3, .1], [.3, .35, .3], 'Head');           // head
+  a.tube('skin', [[-.7, 2, 0], [-1, 1.4, .1], [-1.1, .9, .2]], [.18, .14, .1], 'ArmL'); // arm
+  a.plate('armor', [0, 1.6, .5], [.45, .5, .14], 'Chest', 1, [.1, 0, 0]);               // chest plate
+
+  // Animation: rotation keys per bone; times strictly increase; end at rest for loops.
+  const clip = a.doc.createAnimation('attack');
+  a.channel(clip, 'ArmL', [0, .3, .5, .8, 1.1], [[0,0,0], [-.9,0,0], [1.1,0,.2], [.3,0,0], [0,0,0]]);
+  a.channel(clip, 'Chest', [0, .3, .5, 1.1], [[0,0,0], [0,-.2,0], [0,.25,0], [0,0,0]]);
+
+  return a; // dev runs a.bytes() and writes the GLB for you
+}
+```
+
+## API reference (all of it)
+
+Conventions: **metres, Y up, +Z forward** (the model faces +Z), Euler/quaternion XYZW, `V = [x,y,z]`.
+
+| Call | What it makes |
+|---|---|
+| `a.joint(name, at:V, parent?)` | Skeleton joint at world position. Parents first; first joint is the skeleton root. |
+| `a.ell(mat, center:V, radii:V, bone, seed=0, rock=false)` | Ellipsoid. `rock=true` → low-poly faceted boulder with surface warp. |
+| `a.tube(mat, points:V[], radii:number[], bone, sides=7)` | Capped tube along a polyline (limbs, horns, roots, claws). Fewer radii than points interpolates along the path — `[base, tip]` is enough for a taper. For smooth curves, sample a `THREE.CatmullRomCurve3` into ~12–26 points. |
+| `a.plate(mat, center:V, size:V, bone, seed=0, rotation:V=[0,0,0])` | Bevelled, fractured stone slab; local +Z is the exposed face. Vary `seed` per plate. |
+| `a.add(mat, bone, positions:V[], faces:number[][], flat=false, uvs?)` | Raw triangles, outward winding, for anything else. |
+| `a.channel(clip, bone, times:number[], eulers:V[])` | LINEAR rotation keys (radians, XYZ euler). Times strictly increase. |
+| `a.surfaces.set(mat, surface)` | PBR maps for a material name — see skeleton above. Albedo is sRGB; normal/roughness linear; roughness lives in the **G** channel. `tint` and `alphaCutoff` must be within **0..1** (glTF range). |
+| `a.scale(f)` | Uniformly resize the whole asset (geometry + skeleton) at export — the easy fix when the summary `rest.height` is off target. |
+| `a.doc` | The glTF Transform `Document` — use for morphs, custom skin weights, extra material channels. |
+| `await a.bytes()` | Welds, dedups, prunes, **grounds the model at Y=0**, returns GLB bytes. Use a fresh `Asset` per build. |
+| `palette` | Built-in fallback colors by material name: basalt, edge, wood, grain, moss, ivory, eye (emissive), mouth. Unknown names render gray. |
+
+Limits: each convenience shape is rigidly bound to one bone (blended weights need `a.doc` directly). Preview plays the first animation clip only. `import * as T from 'three'` is available for curves and math.
+
+## dev command
+
+```sh
+bun run dev -- tmp/creature.ts                         # defaults
+bun run dev -- tmp/creature.ts --size=512              # bigger tiles
+bun run dev -- tmp/creature.ts --views="0,0,front;0,1.57,left;.45,-.6,impact"
+bun run dev -- tmp/creature.glb --no-sheet             # validate an existing GLB only
+```
+
+- Default sheet: front/left/back at rest + three animation-phase tiles (3×2 grid). `--views` is `time,yaw[,label]` semicolon-separated; yaw 0 = front, π/2 = left, π = back.
+- Summary JSON: `ok`, `glb`, `bytes`, `triangles`, Khronos `errors`/`warnings` (+ first `issues`), `materials`, `textures`, `joints`, `clips`, `rest` (`height`, `size` [x,y,z], `minY`, `heightWithClip`), `sheet.tiles` (with `blank` flags), `ms`.
+- Use `rest.height`/`rest.size` to check dimensions numerically — no measuring scripts needed. `minY` should be 0 (export grounds the model).
+- Exit code 1 and `ok:false` means fix the recipe or validation errors before continuing.
+
+## Quality checklist (judge the sheet against your reference)
+
+- **Silhouette and proportions first** — textures never rescue a weak blockout. Before the first build, note 4-6 proportion landmarks from the reference (shoulder width vs height, head size, arm reach, stance width, posture lean) and build to those numbers; it usually saves a whole revision.
+- **Grounding and connection** — feet planted at Y=0, limbs visually connected to the body, no floating shells; overlap shapes generously, intersections are cheap.
+- **Material regions** — distinct zones (e.g. armor vs hide vs claws) with distinct textures/colors read far better than one noisy material.
+- **Animation** — anticipation → impact → recovery; keep start == end pose; check the phase tiles show real deformation (no `blank: true` tiles).
+- **Scale of detail** — many medium shapes with varied seeds/rotations beat a few giant primitives; asymmetry sells organic forms.
+- Keep Khronos errors at 0; verify the target engine's import rules separately.
+
+## Pitfalls (each of these has cost an agent a build cycle)
+
+- `tint` components above 1 fail validation — glTF clamps baseColorFactor to 0..1. The supplied albedo maps often render darker than painted concept art; that is expected, don't fight it with tint.
+- Write recipes with your file-editing tool, not shell heredocs (quoting eats `$` and backticks).
+- Horns/antlers count toward `rest.height`. If the summary shows you are over target, call `a.scale(f)` instead of scaling joints by hand (joint-level scale won't change the reported bounds).
+- Iterate with `Edit` on the recipe rather than rewriting the file — full rewrites are where typos sneak in.
+- Overlap shapes generously; intersections are free. Gaps at animated joints are what look broken.
+
+## Persistent server (optional, for many fast frames)
+
+```sh
+bun run preview -- tmp/creature.glb --serve   # prints {pid, url}; also written to tmp/preview-server.json
+```
+
+POST `/asset` (GLB bytes), POST `/frame` `{time,yaw,size,format}` → image bytes, POST `/sheet` `{views,tile}` → sheet image, `/analyze` → stats. One renderer serves requests serially. Kill the recorded PID when done. Prefer plain `bun run dev` unless you need many frames per second.
+
+## Housekeeping
+
+`bun run test` and `bun run check` verify the library. Scratch files under `tmp/` are auto-cleaned after 7 days; move deliverables elsewhere. `GLB_CREATOR_TMP` relocates scratch; `GLB_CREATOR_CLEANUP=off` disables cleanup dispatch (useful during measurements).
