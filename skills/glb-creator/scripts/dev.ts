@@ -60,7 +60,7 @@ if(!args.includes('--no-sheet')){
 }
 
 const summary={
-  ok:v.errors===0,
+  ok:v.errors===0 && !sheetInfo?.error && !(sheetInfo?.tiles?.some((t:any)=>t.blank)),
   glb:absInput.endsWith('.glb')?relative(ROOT,absInput):relative(ROOT,resolve(ROOT,opt('out')??resolve(TMP,`${stem}.glb`))),
   bytes:v.bytes,
   triangles:v.report.info?.totalTriangleCount??null,
@@ -75,4 +75,4 @@ const summary={
   ms:{build:Math.round(buildMs),validate:Math.round(validateMs),render:Math.round(renderMs)}
 };
 console.log(JSON.stringify(summary));
-if(v.errors>0)process.exit(1);
+if(!summary.ok)process.exit(1);

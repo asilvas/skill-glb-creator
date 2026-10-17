@@ -1,0 +1,702 @@
+{
+  "format": "glbCreatorV02PresentationV1",
+  "generated": "2026-10-17T23:22:16.266Z",
+  "experimentGenerated": "2026-10-17T23:06:57.717Z",
+  "sourceDemo": "https://github.com/asilvas/skill-glb-creator-codex-demo",
+  "sourceFiles": [
+    "results/experiment/metrics.json",
+    "results/experiment/quality.json",
+    "results/experiment/integrity.json",
+    "results/experiment/replay/metrics.json",
+    "results/experiment/protocol.md"
+  ],
+  "sourceEvidenceHashes": {
+    "metrics.json": "dd006873394d7c61d8dd37b72953c704ba518162a0621c3457f3cee614ddd4a7",
+    "quality.json": "209b3f5f49d1cc57ebe3337422d127569eb48b59cd4bb3ab5f177827fe922002",
+    "integrity.json": "203d9bda0f74697bc220924dc7ef296b97a591a8dd06aebf3b76e5ce89602446",
+    "replay/metrics.json": "5764e438c0e8eb5e26f0a891f371e574871dfd763464c065053759e70d4f7e29",
+    "protocol.md": "9604f353aef7f773209f9901f352c8af1deb2c0bf34a0101a1eb881e4d513af4"
+  },
+  "labels": {
+    "blender": "Blender CLI",
+    "inherited": "glb-creator v0.1",
+    "candidate": "glb-creator v0.2"
+  },
+  "attribution": {
+    "glb-creator v0.1": "Claude-authored inherited skill",
+    "glb-creator v0.2": "Codex-authored optimizations; builds on v0.1"
+  },
+  "configuredModels": [
+    {
+      "model": "gpt-6.1-sol",
+      "effort": "xhigh",
+      "source": "Selected default config fields observed before initial worker launch; initial inherited/Blender receipts predate automatic configuration capture. No model/effort CLI overrides were supplied.",
+      "cliVersion": "0.163.0-alpha.10.2"
+    }
+  ],
+  "parallelism": 4,
+  "hardware": {
+    "cpu": "AMD Ryzen 9 9950X3D 16-Core Processor          ",
+    "logicalCpus": 32,
+    "memoryGiB": 93.64445877075195,
+    "os": "10.0.26200",
+    "parentBun": "1.4.4",
+    "authoringBun": "worker-selected runtime; exact versions in raw tool output",
+    "gpu": "not independently selected or monitored"
+  },
+  "inputIntegrity": {
+    "identicalTaskHashes": 1,
+    "identicalReferenceHashes": 1,
+    "textureSetsIdentical": true,
+    "textureFilesCompared": 26,
+    "parallel": {
+      "blender": {
+        "workers": 4,
+        "allFourOverlapSeconds": 680.786431,
+        "startSpreadSeconds": 0
+      },
+      "candidate": {
+        "workers": 4,
+        "allFourOverlapSeconds": 438.354481,
+        "startSpreadSeconds": 0
+      },
+      "inherited": {
+        "workers": 4,
+        "allFourOverlapSeconds": 407.011661,
+        "startSpreadSeconds": 0
+      }
+    }
+  },
+  "arms": [
+    {
+      "arm": "blender",
+      "label": "Blender CLI",
+      "n": 4,
+      "delivered": 4,
+      "batchSeconds": 1017.2970000000205,
+      "meanSeconds": 857.0194999999367,
+      "medianSeconds": 865.0779999999213,
+      "meanInputTokens": 2169460,
+      "meanCachedInputTokens": 2060256,
+      "meanUncachedInputTokens": 109204,
+      "meanOutputTokens": 45306.5,
+      "meanReasoningTokens": 19276.75,
+      "meanTotalTokens": 2214766.5,
+      "sizedAssets": 4,
+      "meanBytes": 23685521,
+      "meanTriangles": 213250.5,
+      "khronosPass": 3,
+      "meanQuality": 6.829166666666666
+    },
+    {
+      "arm": "inherited",
+      "label": "glb-creator v0.1",
+      "n": 4,
+      "delivered": 4,
+      "batchSeconds": 633.9689999999246,
+      "meanSeconds": 491.15199999997276,
+      "medianSeconds": 461.87449999997625,
+      "meanInputTokens": 929846.5,
+      "meanCachedInputTokens": 863456,
+      "meanUncachedInputTokens": 66390.5,
+      "meanOutputTokens": 27946,
+      "meanReasoningTokens": 9551.75,
+      "meanTotalTokens": 957792.5,
+      "sizedAssets": 4,
+      "meanBytes": 21971403,
+      "meanTriangles": 145740.5,
+      "khronosPass": 4,
+      "meanQuality": 6.9624999999999995
+    },
+    {
+      "arm": "candidate",
+      "label": "glb-creator v0.2",
+      "n": 4,
+      "delivered": 4,
+      "batchSeconds": 561.265000000014,
+      "meanSeconds": 503.6527499999793,
+      "medianSeconds": 507.53149999998277,
+      "meanInputTokens": 787545,
+      "meanCachedInputTokens": 730432,
+      "meanUncachedInputTokens": 57113,
+      "meanOutputTokens": 30509,
+      "meanReasoningTokens": 11915.25,
+      "meanTotalTokens": 818054,
+      "sizedAssets": 4,
+      "meanBytes": 16083309,
+      "meanTriangles": 154507.75,
+      "khronosPass": 4,
+      "meanQuality": 6.862500000000001
+    }
+  ],
+  "runs": [
+    {
+      "run": "blender-1",
+      "arm": "blender",
+      "seconds": 866.186999999918,
+      "usage": {
+        "input_tokens": 2555423,
+        "cached_input_tokens": 2449280,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 47795,
+        "reasoning_output_tokens": 20599
+      },
+      "totalTokens": 2603218,
+      "bytes": 18720432,
+      "triangles": 120114,
+      "khronosErrors": 0,
+      "quality": 6.833333333333333
+    },
+    {
+      "run": "blender-2",
+      "arm": "blender",
+      "seconds": 680.7189999999246,
+      "usage": {
+        "input_tokens": 1613110,
+        "cached_input_tokens": 1536512,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 39455,
+        "reasoning_output_tokens": 15907
+      },
+      "totalTokens": 1652565,
+      "bytes": 37330936,
+      "triangles": 408044,
+      "khronosErrors": 81,
+      "quality": 6.7
+    },
+    {
+      "run": "blender-3",
+      "arm": "blender",
+      "seconds": 1017.2029999999795,
+      "usage": {
+        "input_tokens": 3072552,
+        "cached_input_tokens": 2899584,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 47749,
+        "reasoning_output_tokens": 20652
+      },
+      "totalTokens": 3120301,
+      "bytes": 14320484,
+      "triangles": 171208,
+      "khronosErrors": 0,
+      "quality": 6.933333333333333
+    },
+    {
+      "run": "blender-4",
+      "arm": "blender",
+      "seconds": 863.9689999999246,
+      "usage": {
+        "input_tokens": 1436755,
+        "cached_input_tokens": 1355648,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 46227,
+        "reasoning_output_tokens": 19949
+      },
+      "totalTokens": 1482982,
+      "bytes": 24370232,
+      "triangles": 153636,
+      "khronosErrors": 0,
+      "quality": 6.85
+    },
+    {
+      "run": "candidate-1",
+      "arm": "candidate",
+      "seconds": 438.31299999996554,
+      "usage": {
+        "input_tokens": 703853,
+        "cached_input_tokens": 649088,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 26681,
+        "reasoning_output_tokens": 9863
+      },
+      "totalTokens": 730534,
+      "bytes": 17252076,
+      "triangles": 133002,
+      "khronosErrors": 0,
+      "quality": 7.033333333333333
+    },
+    {
+      "run": "candidate-2",
+      "arm": "candidate",
+      "seconds": 460.18799999996554,
+      "usage": {
+        "input_tokens": 829899,
+        "cached_input_tokens": 775808,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 27137,
+        "reasoning_output_tokens": 10890
+      },
+      "totalTokens": 857036,
+      "bytes": 15460492,
+      "triangles": 187760,
+      "khronosErrors": 0,
+      "quality": 6.766666666666667
+    },
+    {
+      "run": "candidate-3",
+      "arm": "candidate",
+      "seconds": 554.875,
+      "usage": {
+        "input_tokens": 788001,
+        "cached_input_tokens": 728960,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 31831,
+        "reasoning_output_tokens": 12740
+      },
+      "totalTokens": 819832,
+      "bytes": 18475812,
+      "triangles": 182900,
+      "khronosErrors": 0,
+      "quality": 6.933333333333334
+    },
+    {
+      "run": "candidate-4",
+      "arm": "candidate",
+      "seconds": 561.234999999986,
+      "usage": {
+        "input_tokens": 828427,
+        "cached_input_tokens": 767872,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 36387,
+        "reasoning_output_tokens": 14168
+      },
+      "totalTokens": 864814,
+      "bytes": 13144856,
+      "triangles": 114369,
+      "khronosErrors": 0,
+      "quality": 6.716666666666667
+    },
+    {
+      "run": "inherited-1",
+      "arm": "inherited",
+      "seconds": 406.9529999999795,
+      "usage": {
+        "input_tokens": 760849,
+        "cached_input_tokens": 703872,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 23536,
+        "reasoning_output_tokens": 7273
+      },
+      "totalTokens": 784385,
+      "bytes": 24859480,
+      "triangles": 180938,
+      "khronosErrors": 0,
+      "quality": 7.033333333333333
+    },
+    {
+      "run": "inherited-2",
+      "arm": "inherited",
+      "seconds": 456.2179999999935,
+      "usage": {
+        "input_tokens": 1183721,
+        "cached_input_tokens": 1100416,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 27468,
+        "reasoning_output_tokens": 7995
+      },
+      "totalTokens": 1211189,
+      "bytes": 12546196,
+      "triangles": 101574,
+      "khronosErrors": 0,
+      "quality": 6.966666666666667
+    },
+    {
+      "run": "inherited-3",
+      "arm": "inherited",
+      "seconds": 633.905999999959,
+      "usage": {
+        "input_tokens": 865622,
+        "cached_input_tokens": 802176,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 33218,
+        "reasoning_output_tokens": 14068
+      },
+      "totalTokens": 898840,
+      "bytes": 22991276,
+      "triangles": 149804,
+      "khronosErrors": 0,
+      "quality": 6.8999999999999995
+    },
+    {
+      "run": "inherited-4",
+      "arm": "inherited",
+      "seconds": 467.530999999959,
+      "usage": {
+        "input_tokens": 909194,
+        "cached_input_tokens": 847360,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 27562,
+        "reasoning_output_tokens": 8871
+      },
+      "totalTokens": 936756,
+      "bytes": 27488660,
+      "triangles": 150646,
+      "khronosErrors": 0,
+      "quality": 6.95
+    }
+  ],
+  "quality": {
+    "method": "Three independent agents, anonymous IDs, same reference/sheets and numerical motion/grounding checks; mean rubric scores. Model judgments are subjective, correlated preferences remain possible.",
+    "rubric": {
+      "silhouette": 3,
+      "materials": 3,
+      "details": 2,
+      "animation": 2
+    },
+    "reviewerCount": 3
+  },
+  "replay": {
+    "recipe": "tools/replay-recipe.ts",
+    "recipeSha256": "96f573a426019b6d0fe36206b0a7cd389d255b18a6c3d3849562883f0f167903",
+    "repeats": 7,
+    "order": "alternating",
+    "summary": [
+      {
+        "arm": "inherited",
+        "medianBuildExportMs": 162.81980000000001,
+        "medianGeometryMs": 85.9028,
+        "bytes": 8624064
+      },
+      {
+        "arm": "candidate",
+        "medianBuildExportMs": 107.9639,
+        "medianGeometryMs": 40.05630000000001,
+        "bytes": 8235352
+      }
+    ],
+    "pixelsIdentical": true,
+    "maxDecodedAttributeDifference": 0,
+    "trials": [
+      {
+        "trial": 0,
+        "processWallMs": 278.6687,
+        "arm": "inherited",
+        "geometrySha256": "9bdab43df8971cdc982d88552f89bfec4785d58e244dc78b4f1e4f1fc2b887b2",
+        "geometryMs": 70.8734,
+        "exportMs": 78.31299999999999,
+        "totalMs": 149.1877,
+        "bytes": 8624064
+      },
+      {
+        "trial": 0,
+        "processWallMs": 228.67650000000003,
+        "arm": "candidate",
+        "geometrySha256": "5b6d74da7d802b601835ea11c6e0d72abaab7bf50d2f8b658ef37467be7b3531",
+        "geometryMs": 40.05630000000001,
+        "exportMs": 63.428200000000004,
+        "totalMs": 103.48570000000001,
+        "bytes": 8235352
+      },
+      {
+        "trial": 1,
+        "processWallMs": 236.3632,
+        "arm": "candidate",
+        "geometrySha256": "5b6d74da7d802b601835ea11c6e0d72abaab7bf50d2f8b658ef37467be7b3531",
+        "geometryMs": 39.56569999999999,
+        "exportMs": 70.5776,
+        "totalMs": 110.1446,
+        "bytes": 8235352
+      },
+      {
+        "trial": 1,
+        "processWallMs": 289.6426999999999,
+        "arm": "inherited",
+        "geometrySha256": "9bdab43df8971cdc982d88552f89bfec4785d58e244dc78b4f1e4f1fc2b887b2",
+        "geometryMs": 85.9028,
+        "exportMs": 75.7909,
+        "totalMs": 161.69530000000003,
+        "bytes": 8624064
+      },
+      {
+        "trial": 2,
+        "processWallMs": 358.1657,
+        "arm": "inherited",
+        "geometrySha256": "9bdab43df8971cdc982d88552f89bfec4785d58e244dc78b4f1e4f1fc2b887b2",
+        "geometryMs": 86.61390000000002,
+        "exportMs": 77.4855,
+        "totalMs": 164.10070000000002,
+        "bytes": 8624064
+      },
+      {
+        "trial": 2,
+        "processWallMs": 225.9324999999999,
+        "arm": "candidate",
+        "geometrySha256": "5b6d74da7d802b601835ea11c6e0d72abaab7bf50d2f8b658ef37467be7b3531",
+        "geometryMs": 39.7928,
+        "exportMs": 61.7586,
+        "totalMs": 101.5528,
+        "bytes": 8235352
+      },
+      {
+        "trial": 3,
+        "processWallMs": 242.5485000000001,
+        "arm": "candidate",
+        "geometrySha256": "5b6d74da7d802b601835ea11c6e0d72abaab7bf50d2f8b658ef37467be7b3531",
+        "geometryMs": 39.68300000000001,
+        "exportMs": 76.65299999999999,
+        "totalMs": 116.33690000000001,
+        "bytes": 8235352
+      },
+      {
+        "trial": 3,
+        "processWallMs": 282.67179999999985,
+        "arm": "inherited",
+        "geometrySha256": "9bdab43df8971cdc982d88552f89bfec4785d58e244dc78b4f1e4f1fc2b887b2",
+        "geometryMs": 84.4731,
+        "exportMs": 76.93090000000001,
+        "totalMs": 161.40499999999997,
+        "bytes": 8624064
+      },
+      {
+        "trial": 4,
+        "processWallMs": 292.1376,
+        "arm": "inherited",
+        "geometrySha256": "9bdab43df8971cdc982d88552f89bfec4785d58e244dc78b4f1e4f1fc2b887b2",
+        "geometryMs": 91.695,
+        "exportMs": 79.41579999999999,
+        "totalMs": 171.1121,
+        "bytes": 8624064
+      },
+      {
+        "trial": 4,
+        "processWallMs": 295.5744999999997,
+        "arm": "candidate",
+        "geometrySha256": "5b6d74da7d802b601835ea11c6e0d72abaab7bf50d2f8b658ef37467be7b3531",
+        "geometryMs": 40.65769999999999,
+        "exportMs": 65.93790000000001,
+        "totalMs": 106.59700000000001,
+        "bytes": 8235352
+      },
+      {
+        "trial": 5,
+        "processWallMs": 234.7469000000001,
+        "arm": "candidate",
+        "geometrySha256": "5b6d74da7d802b601835ea11c6e0d72abaab7bf50d2f8b658ef37467be7b3531",
+        "geometryMs": 43.4388,
+        "exportMs": 66.39230000000002,
+        "totalMs": 109.833,
+        "bytes": 8235352
+      },
+      {
+        "trial": 5,
+        "processWallMs": 291.57259999999997,
+        "arm": "inherited",
+        "geometrySha256": "9bdab43df8971cdc982d88552f89bfec4785d58e244dc78b4f1e4f1fc2b887b2",
+        "geometryMs": 88.3503,
+        "exportMs": 78.0687,
+        "totalMs": 166.4203,
+        "bytes": 8624064
+      },
+      {
+        "trial": 6,
+        "processWallMs": 292.1687999999999,
+        "arm": "inherited",
+        "geometrySha256": "9bdab43df8971cdc982d88552f89bfec4785d58e244dc78b4f1e4f1fc2b887b2",
+        "geometryMs": 85.749,
+        "exportMs": 77.06920000000002,
+        "totalMs": 162.81980000000001,
+        "bytes": 8624064
+      },
+      {
+        "trial": 6,
+        "processWallMs": 237.0903000000003,
+        "arm": "candidate",
+        "geometrySha256": "5b6d74da7d802b601835ea11c6e0d72abaab7bf50d2f8b658ef37467be7b3531",
+        "geometryMs": 42.3532,
+        "exportMs": 65.6095,
+        "totalMs": 107.9639,
+        "bytes": 8235352
+      }
+    ],
+    "comparisons": [
+      {
+        "time": 0,
+        "differentChannels": 0,
+        "totalChannels": 589824,
+        "maxDifference": 0,
+        "meanAbs": 0
+      },
+      {
+        "time": 0.36,
+        "differentChannels": 0,
+        "totalChannels": 589824,
+        "maxDifference": 0,
+        "meanAbs": 0
+      },
+      {
+        "time": 0.66,
+        "differentChannels": 0,
+        "totalChannels": 589824,
+        "maxDifference": 0,
+        "meanAbs": 0
+      },
+      {
+        "time": 1.02,
+        "differentChannels": 0,
+        "totalChannels": 589824,
+        "maxDifference": 0,
+        "meanAbs": 0
+      },
+      {
+        "time": 1.2,
+        "differentChannels": 0,
+        "totalChannels": 589824,
+        "maxDifference": 0,
+        "meanAbs": 0
+      }
+    ],
+    "attributes": [
+      {
+        "material": "bark",
+        "semantic": "POSITION",
+        "maxDecodedDifference": 0
+      },
+      {
+        "material": "bark",
+        "semantic": "NORMAL",
+        "maxDecodedDifference": 0
+      },
+      {
+        "material": "bark",
+        "semantic": "TANGENT",
+        "maxDecodedDifference": 0
+      },
+      {
+        "material": "bark",
+        "semantic": "TEXCOORD_0",
+        "maxDecodedDifference": 0
+      },
+      {
+        "material": "bark",
+        "semantic": "JOINTS_0",
+        "maxDecodedDifference": 0
+      },
+      {
+        "material": "bark",
+        "semantic": "WEIGHTS_0",
+        "maxDecodedDifference": 0
+      },
+      {
+        "material": "stone",
+        "semantic": "POSITION",
+        "maxDecodedDifference": 0
+      },
+      {
+        "material": "stone",
+        "semantic": "NORMAL",
+        "maxDecodedDifference": 0
+      },
+      {
+        "material": "stone",
+        "semantic": "TANGENT",
+        "maxDecodedDifference": 0
+      },
+      {
+        "material": "stone",
+        "semantic": "TEXCOORD_0",
+        "maxDecodedDifference": 0
+      },
+      {
+        "material": "stone",
+        "semantic": "JOINTS_0",
+        "maxDecodedDifference": 0
+      },
+      {
+        "material": "stone",
+        "semantic": "WEIGHTS_0",
+        "maxDecodedDifference": 0
+      },
+      {
+        "material": "moss",
+        "semantic": "POSITION",
+        "maxDecodedDifference": 0
+      },
+      {
+        "material": "moss",
+        "semantic": "NORMAL",
+        "maxDecodedDifference": 0
+      },
+      {
+        "material": "moss",
+        "semantic": "TANGENT",
+        "maxDecodedDifference": 0
+      },
+      {
+        "material": "moss",
+        "semantic": "TEXCOORD_0",
+        "maxDecodedDifference": 0
+      },
+      {
+        "material": "moss",
+        "semantic": "JOINTS_0",
+        "maxDecodedDifference": 0
+      },
+      {
+        "material": "moss",
+        "semantic": "WEIGHTS_0",
+        "maxDecodedDifference": 0
+      },
+      {
+        "material": "ivory",
+        "semantic": "POSITION",
+        "maxDecodedDifference": 0
+      },
+      {
+        "material": "ivory",
+        "semantic": "NORMAL",
+        "maxDecodedDifference": 0
+      },
+      {
+        "material": "ivory",
+        "semantic": "TANGENT",
+        "maxDecodedDifference": 0
+      },
+      {
+        "material": "ivory",
+        "semantic": "TEXCOORD_0",
+        "maxDecodedDifference": 0
+      },
+      {
+        "material": "ivory",
+        "semantic": "JOINTS_0",
+        "maxDecodedDifference": 0
+      },
+      {
+        "material": "ivory",
+        "semantic": "WEIGHTS_0",
+        "maxDecodedDifference": 0
+      }
+    ]
+  },
+  "sourceHashes": {
+    "SKILL.md": "ed801be29355ddeaadb7e95a5dc52fafae8f2280b8b7ba38e6951ba8ac721c32",
+    "scripts/geometry.ts": "5b6d74da7d802b601835ea11c6e0d72abaab7bf50d2f8b658ef37467be7b3531",
+    "scripts/dev.ts": "3546f8979d8a47cb98d1ad557dd29856ce5448578cc6da4f188785f472f6905e",
+    "tests/optimization.test.ts": "5c815309ace4371739ea0d2b9333d5f0ee671534cbb1e2ad672b5850e89e1911"
+  },
+  "representatives": {
+    "blender": "blender-1",
+    "inherited": "inherited-2",
+    "candidate": "candidate-3"
+  },
+  "limitations": [
+    "One task, one host, n=4 per pipeline, fixed arm order, API/cache variance.",
+    "All Blender workers selected CPU Cycles previews; timing is not a fastest-possible Blender claim.",
+    "Visual ratings are subjective AI judgments; no visual quality gain established.",
+    "Total tokens do not establish dollar savings; development and review overhead is excluded and unmetered.",
+    "Same-recipe replay isolates library performance; authoring trials also vary generated geometry."
+  ],
+  "mediaHashes": {
+    "all-runs.png": "38affc5631245da60f6ca628499f2eebd3933ff7d0f6bc1ed9d784a9016d89b4",
+    "attack-comparison.webp": "a7defa6c3074da26eaa94a70bce153aa4d5c26a8fca51cac65f87012fadb216c",
+    "attack.webp": "245ee4455d12bf48784141ac67b3a8fdd699344b5d699faab74657ae2f46f9e1",
+    "blender-attack.webp": "a3c68ecac3454cc0b69090d3dceb3dd7c47027d403bc6977dcabb2f2689779d3",
+    "bytes.svg": "da799f74c46543fe60c1ae574ce7bff5e5d15697788304cd981e04e94986cdb5",
+    "comparison.png": "6ef36842f466be8ac1c49f43b70f0ce7a54945bfd2933af855568ba1ebbed5cf",
+    "quality.svg": "170fffee6efac662f567db4f7cfdaa6deeb70d03a32b4459af196b846b421b2e",
+    "time.svg": "26000c682c12475c94d68c3a1c20e2ce6361e508028f0e2c7ae214032d0d8a35",
+    "tokens.svg": "1354d1717558fc56428c29b96ddba7215b01e0fe7b1f206abfd9d48aa2d221fe",
+    "v0.1-attack.webp": "40a5f13d37c4cc555e23a7d83f5ba8e3c0dbe4961ec450f4e270c38f506526b9",
+    "v0.2-attack.webp": "245ee4455d12bf48784141ac67b3a8fdd699344b5d699faab74657ae2f46f9e1"
+  }
+}

@@ -1,6 +1,6 @@
 {
   "name": "@asilvas/glb-creator",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Bun GLB authoring and memory-first previews for coding agents",
   "license": "MIT",
   "type": "module",
@@ -31,6 +31,6 @@
     "frame": "bun scripts/frame.ts",
     "clean": "bun scripts/clean.ts",
     "check": "bun scripts/skill-check.ts",
-    "test": "bun test ./tests/core.test.ts ./tests/cleanup.test.ts"
+    "test": "bun test ./tests/core.test.ts ./tests/cleanup.test.ts ./tests/optimization.test.ts"
   }
 }

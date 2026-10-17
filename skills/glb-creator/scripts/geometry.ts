@@ -2,10 +2,11 @@ import { Document,NodeIO,Accessor,Logger } from '@gltf-transform/core';
 import { dedup,prune,weld } from '@gltf-transform/functions';
 import * as T from 'three';
 import { scheduleCleanup } from './cleanup';
+import {dirname,resolve} from 'node:path';
 export type V=[number,number,number];
 export type Joint={name:string,at:V,parent?:string};
 export const palette:Record<string,V>={basalt:[.11,.125,.115],edge:[.19,.205,.18],wood:[.18,.085,.033],grain:[.29,.16,.067],moss:[.14,.19,.042],ivory:[.6,.49,.31],eye:[1,.35,.018],mouth:[.012,.016,.012]};
-type Batch={p:number[],n:number[],j:number[],w:number[],uv:number[],tan:number[]};
+type Batch={p:number[],n:number[],j:number[],w:number[],uv:number[],tan:number[],idx:number[]};
 export type Surface={baseColor:Uint8Array,normal?:Uint8Array,roughness?:Uint8Array,normalScale?:number,tint?:V,alphaCutoff?:number};
 /** Y up, +Z forward, metres. Geometry is authored in world bind space. */
 export class Asset {
@@ -13,6 +14,17 @@ export class Asset {
   joints:Joint[]=[];nodes=new Map<string,any>();batches=new Map<string,Batch>();
   surfaces=new Map<string,Surface>();
   constructor(){this.doc.getRoot().setDefaultScene(this.scene);this.doc.setLogger(new Logger(Logger.Verbosity.ERROR));}
+  /** Load original PBR bytes from a manifest; aliases map material name to manifest key. */
+  async loadSurfaces(manifest:string,aliases?:Record<string,string>){
+    const path=resolve(manifest),data=await Bun.file(path).json();
+    const mapping=aliases??Object.fromEntries(Object.keys(data.materials).map(k=>[k,k]));
+    for(const [name,key] of Object.entries(mapping)){
+      const m=data.materials[key];if(!m?.baseColor)throw Error(`Missing PBR material ${key}`);
+      const read=async(file:string)=>new Uint8Array(await Bun.file(resolve(dirname(path),file)).arrayBuffer());
+      this.surfaces.set(name,{baseColor:await read(m.baseColor),...(m.normal?{normal:await read(m.normal)}:{}),...(m.roughness?{roughness:await read(m.roughness)}:{})});
+    }
+    return this;
+  }
   joint(name:string,at:V,parent?:string){
     if(this.nodes.has(name)||parent&&!this.nodes.has(parent))throw Error(`Invalid joint ${name}`);
     const n=this.doc.createNode(name);const p=this.joints.find(j=>j.name===parent)?.at??[0,0,0];
@@ -23,10 +35,24 @@ export class Asset {
   add(mat:string,bone:string,positions:V[],faces:number[][],flat=false,uvs?:[number,number][]){
     const ji=this.joints.findIndex(j=>j.name===bone);if(ji<0)throw Error(`Unknown joint ${bone}`);
     if(uvs&&uvs.length!==positions.length)throw Error('UV count must match positions');
-    const b=this.batches.get(mat)??{p:[],n:[],j:[],w:[],uv:[],tan:[]};this.batches.set(mat,b);
+    const b=this.batches.get(mat)??{p:[],n:[],j:[],w:[],uv:[],tan:[],idx:[]};this.batches.set(mat,b);
     const geo=new T.BufferGeometry();geo.setAttribute('position',new T.Float32BufferAttribute(positions.flat(),3));
     geo.setIndex(faces.flat());geo.computeVertexNormals();const smooth=geo.getAttribute('normal');
     geo.setAttribute('uv',new T.Float32BufferAttribute((uvs??positions.map(p=>[p[0],p[1]])).flat(),2));geo.computeTangents();const smoothTangent=geo.getAttribute('tangent');
+    // Keep indexed smooth geometry indexed. Expanding each triangle only to weld it
+    // again multiplies JS allocations and memory traffic without changing the GLB.
+    if(!flat){
+      const remap=new Map<number,number>();
+      for(const i of new Set(faces.flat())){
+        remap.set(i,b.p.length/3);
+        const n=new T.Vector3(smooth.getX(i),smooth.getY(i),smooth.getZ(i));
+        let t=new T.Vector3(smoothTangent.getX(i),smoothTangent.getY(i),smoothTangent.getZ(i));
+        if(t.lengthSq()<1e-8)t=Math.abs(n.x)<.9?new T.Vector3(1,0,0).addScaledVector(n,-n.x):new T.Vector3(0,1,0).addScaledVector(n,-n.y);t.normalize();
+        b.p.push(...positions[i]);b.n.push(...n.toArray());b.j.push(ji,0,0,0);b.w.push(1,0,0,0);b.uv.push(...(uvs?.[i]??[positions[i][0],positions[i][1]]));b.tan.push(...t.toArray(),smoothTangent.getW(i)<0?-1:1);
+      }
+      for(const f of faces)for(const i of f)b.idx.push(remap.get(i)!);
+      geo.dispose();return;
+    }
     for(const f of faces){
       const normal=new T.Vector3().subVectors(new T.Vector3(...positions[f[1]]),new T.Vector3(...positions[f[0]])).cross(new T.Vector3().subVectors(new T.Vector3(...positions[f[2]]),new T.Vector3(...positions[f[0]]))).normalize();
       const uv=f.map(i=>uvs?.[i]??[positions[i][0],positions[i][1]]),e1=new T.Vector3(...positions[f[1]]).sub(new T.Vector3(...positions[f[0]])),e2=new T.Vector3(...positions[f[2]]).sub(new T.Vector3(...positions[f[0]]));
@@ -34,6 +60,7 @@ export class Asset {
       const tangent=Math.abs(det)>1e-9?e1.clone().multiplyScalar(dv2).addScaledVector(e2,-dv1).divideScalar(det):new T.Vector3(1,0,0);
       const bitangent=Math.abs(det)>1e-9?e2.clone().multiplyScalar(du1).addScaledVector(e1,-du2).divideScalar(det):new T.Vector3(0,1,0);
       for(const i of f){
+        b.idx.push(b.p.length/3);
         const n=flat?normal:new T.Vector3(smooth.getX(i),smooth.getY(i),smooth.getZ(i));let t=flat?tangent.clone().addScaledVector(n,-n.dot(tangent)):new T.Vector3(smoothTangent.getX(i),smoothTangent.getY(i),smoothTangent.getZ(i));
         if(t.lengthSq()<1e-8)t=Math.abs(n.x)<.9?new T.Vector3(1,0,0).addScaledVector(n,-n.x):new T.Vector3(0,1,0).addScaledVector(n,-n.y);t.normalize();
         b.p.push(...positions[i]);b.n.push(...n.toArray());b.j.push(ji,0,0,0);b.w.push(1,0,0,0);b.uv.push(...(uvs?.[i]??[positions[i][0],positions[i][1]]));b.tan.push(...t.toArray(),flat?(new T.Vector3().crossVectors(n,t).dot(bitangent)<0?-1:1):(smoothTangent.getW(i)<0?-1:1));
@@ -57,8 +84,10 @@ export class Asset {
     }
     this.add(mat,bone,p,f,true,uv);
   }
-  ell(mat:string,c:V,s:V,bone:string,seed=0,rock=false){
-    const nu=rock?9:18,nv=rock?6:12,p:V[]=[[c[0],c[1]+s[1],c[2]]],f:number[][]=[],uv:[number,number][]=[[.5,0]];
+  ell(mat:string,c:V,s:V,bone:string,seed=0,rock=false,rotation:V=[0,0,0],segments?:[number,number]){
+    const nu=segments?.[0]??(rock?9:18),nv=segments?.[1]??(rock?6:12);
+    if(!Number.isInteger(nu)||!Number.isInteger(nv)||nu<3||nv<2||nu>256||nv>256)throw Error('ell segments must be integers: longitude 3..256, latitude 2..256');
+    const p:V[]=[[c[0],c[1]+s[1],c[2]]],f:number[][]=[],uv:[number,number][]=[[.5,0]];
     for(let j=1;j<nv;j++)for(let i=0;i<=nu;i++){
       const a=Math.PI*j/nv,t=2*Math.PI*i/nu,r=1+(rock?.14:.035)*Math.sin((i%nu)*7.13+j*5.7+seed);
       p.push([c[0]+s[0]*Math.sin(a)*Math.cos(t)*r,c[1]+s[1]*Math.cos(a)*r,c[2]+s[2]*Math.sin(a)*Math.sin(t)*r]);
@@ -70,7 +99,17 @@ export class Asset {
       const a=1+j*(nu+1)+i,b=a+1,d=a+nu+1,e=b+nu+1;f.push([a,b,d],[b,e,d]);
     }
     for(let i=0;i<nu;i++)f.push([bottom,1+(nv-2)*(nu+1)+i,2+(nv-2)*(nu+1)+i]);
+    if(rotation.some(x=>x!==0)){
+      const q=new T.Quaternion().setFromEuler(new T.Euler(...rotation)),center=new T.Vector3(...c);
+      for(let i=0;i<p.length;i++)p[i]=new T.Vector3(...p[i]).sub(center).applyQuaternion(q).add(center).toArray() as V;
+    }
     this.add(mat,bone,p,f,rock,uv);
+  }
+  /** Centripetal Catmull-Rom tube: control points + taper, no Three.js boilerplate. */
+  curve(mat:string,points:V[],radii:number[],bone:string,sides=7,segments=16){
+    if(points.length<2||!Number.isInteger(segments)||segments<2||segments>256)throw Error('curve needs 2+ points and 2..256 segments');
+    const path=new T.CatmullRomCurve3(points.map(p=>new T.Vector3(...p)));
+    this.tube(mat,path.getPoints(segments).map(p=>p.toArray() as V),radii,bone,sides);
   }
   tube(mat:string,points:V[],radii:number[],bone:string,sides=7){
     if(points.length<2||!radii.length)throw Error('Tube requires at least two points and one radius');
@@ -105,7 +144,7 @@ export class Asset {
     const sampler=this.doc.createAnimationSampler().setInput(input).setOutput(output).setInterpolation('LINEAR');
     clip.addSampler(sampler).addChannel(this.doc.createAnimationChannel().setTargetNode(this.nodes.get(bone)).setTargetPath('rotation').setSampler(sampler));
   }
-  access(type:string,array:Float32Array|Uint16Array|Uint32Array){return this.doc.createAccessor().setType(type as any).setArray(array).setBuffer(this.buffer);}
+  access(type:string,array:Float32Array|Uint8Array|Uint16Array|Uint32Array){return this.doc.createAccessor().setType(type as any).setArray(array).setBuffer(this.buffer);}
   scaleFactor=1;
   /** Uniformly resize the whole asset (geometry, joints, bind poses) at export. */
   scale(factor:number){if(!Number.isFinite(factor)||factor<=0)throw Error('scale factor must be positive');this.scaleFactor=factor;return this;}
@@ -123,7 +162,7 @@ export class Asset {
     }
     // Rebase the complete bind pose, including joints and inverse binds, onto ground.
     let minimum=Infinity;for(const b of this.batches.values())for(let i=1;i<b.p.length;i+=3)minimum=Math.min(minimum,b.p[i]);
-    const lift=Math.max(0,-minimum);
+    const lift=Number.isFinite(minimum)?-minimum:0;
     if(lift){for(const b of this.batches.values())for(let i=1;i<b.p.length;i+=3)b.p[i]+=lift;for(const j of this.joints)j.at[1]+=lift;for(const j of this.joints.filter(j=>!j.parent)){const root=this.nodes.get(j.name),t=root.getTranslation();root.setTranslation([t[0],t[1]+lift,t[2]]);}}
     const skin=this.doc.createSkin('rig');const ibm:number[]=[];
     for(const j of this.joints){skin.addJoint(this.nodes.get(j.name));ibm.push(...new T.Matrix4().makeTranslation(-j.at[0],-j.at[1],-j.at[2]).toArray());}
@@ -140,13 +179,17 @@ export class Asset {
         if(surface.roughness)m.setMetallicRoughnessTexture(texture('roughness',surface.roughness)).setRoughnessFactor(1);
       }
       if(name==='eye')m.setEmissiveFactor(palette.eye.map(c=>c*.7) as V);
-      mesh.addPrimitive(this.doc.createPrimitive().setMaterial(m)
+      const joints=this.joints.length<=256?new Uint8Array(b.j):new Uint16Array(b.j);
+      // Convenience geometry has exact rigid 0/1 weights: UNORM8 is lossless.
+      const weights=this.access('VEC4',new Uint8Array(b.w.map(w=>w*255))).setNormalized(true);
+      const indices=this.access('SCALAR',b.p.length/3<=65536?new Uint16Array(b.idx):new Uint32Array(b.idx));
+      mesh.addPrimitive(this.doc.createPrimitive().setMaterial(m).setIndices(indices)
         .setAttribute('POSITION',this.access('VEC3',new Float32Array(b.p)))
         .setAttribute('NORMAL',this.access('VEC3',new Float32Array(b.n)))
         .setAttribute('TEXCOORD_0',this.access('VEC2',new Float32Array(b.uv)))
         .setAttribute('TANGENT',this.access('VEC4',new Float32Array(b.tan)))
-        .setAttribute('JOINTS_0',this.access('VEC4',new Uint16Array(b.j)))
-        .setAttribute('WEIGHTS_0',this.access('VEC4',new Float32Array(b.w))));
+        .setAttribute('JOINTS_0',this.access('VEC4',joints))
+        .setAttribute('WEIGHTS_0',weights));
     }
     this.scene.addChild(this.doc.createNode('body').setMesh(mesh).setSkin(skin));
     await this.doc.transform(weld(),dedup(),prune());

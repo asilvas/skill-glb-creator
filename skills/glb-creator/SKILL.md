@@ -5,121 +5,85 @@ description: Create textured, rigged, animated 3D GLB assets procedurally with B
 
 # glb-creator
 
-Author GLB assets in TypeScript and see every revision in one image. The whole loop is two tool calls per revision: edit the recipe, run `dev`, read the sheet. **This file contains the complete API — do not read the `scripts/` sources.**
+Write a recipe, run `dev`, view the sheet, edit. The API below is sufficient for ordinary assets; inspect implementation only to diagnose a blocking error. Run `bun run setup` in this folder once if dependencies are missing.
 
-## Setup (once)
+## Build and inspect
 
 ```sh
-bun run setup   # from this skill folder; installs pinned deps (skip if node_modules/ exists)
+bun run dev -- tmp/asset.ts
+bun run dev -- tmp/asset.ts --size=512
+bun run dev -- tmp/asset.ts --out=/absolute/model.glb --sheet=sheet.webp
+bun run dev -- tmp/model.glb --no-sheet
 ```
 
-## The iteration loop
+Recipe paths and `--out` resolve from the skill folder. Sheets resolve within `GLB_CREATOR_TMP` (default skill `tmp/`). Set that variable to your output folder for isolated jobs; set `GLB_CREATOR_CLEANUP=off` to retain benchmark artifacts. PowerShell: `$env:GLB_CREATOR_TMP='C:/path/to/output'`.
 
-1. Write/edit a recipe at `tmp/<asset>.ts` (skeleton below).
-2. `bun run dev -- tmp/<asset>.ts` — builds, validates (Khronos), writes `tmp/<asset>.glb` and a contact sheet `tmp/<asset>-sheet.webp`, prints one JSON summary line.
-3. **View the sheet with your image file reader** (e.g. Read tool). Judge it against the reference, fix the recipe, repeat.
+`dev` writes the GLB and prints one JSON line: `ok`, paths, bytes, triangles, Khronos errors/warnings/issues, materials, texture/joint counts, clips, `rest` dimensions, sheet tile/blank flags, and build/validate/render milliseconds. **View the sheet image**; a validator cannot judge appearance. Failed renders or blank tiles fail `dev`. Use `--no-sheet` for intentional validation-only work. Never print image base64 or GLB bytes.
 
-Never print GLB bytes or image base64 into your context. The JSON summary plus the sheet image is everything you need.
+Default sheet: front/left/back at rest, then 30%/55%/85% of the first animation, with camera framing frozen across the clip. Override with `--views="0,0,front;0,1.57,left;.5,-.6,impact"` (time seconds, yaw radians, label).
 
-## Recipe skeleton (complete and working)
+## Recipe
+
+Coordinates: metres, **Y up, +Z forward**. Geometry and joints use world bind space. Euler rotations are XYZ radians, quaternions XYZW. Shapes bind rigidly to their joint; overlap surfaces to keep articulation connected.
 
 ```ts
-// tmp/creature.ts
-import { Asset, type V } from '../scripts/geometry';
+import {Asset, type V} from '../scripts/geometry'; // adjust to recipe location
 
 export default async function build() {
   const a = new Asset();
-
-  // Skeleton: add parents before children. First joint is the root.
-  a.joint('Root', [0, 0, 0]);
-  a.joint('Chest', [0, 1.4, 0], 'Root');
-  a.joint('Head', [0, 2.2, .1], 'Chest');
-  a.joint('ArmL', [-.7, 2.0, 0], 'Chest');
-
-  // Optional PBR textures per material name (otherwise palette/gray fallback).
-  a.surfaces.set('skin', {
-    baseColor: new Uint8Array(await Bun.file('path/to/albedo.jpg').arrayBuffer()),
-    normal: new Uint8Array(await Bun.file('path/to/normal.png').arrayBuffer()),      // optional
-    roughness: new Uint8Array(await Bun.file('path/to/roughness.png').arrayBuffer()),// optional, G channel
-    normalScale: .7,            // optional
-    // tint: [1,.9,.8],         // optional albedo multiplier
-    // alphaCutoff: .4,         // optional alpha-mask cutout
-  });
-
-  // Geometry: each call binds fully to one bone.
-  a.ell('skin', [0, 1.4, 0], [.55, .8, .45], 'Chest');          // torso ellipsoid
-  a.ell('skin', [0, 2.3, .1], [.3, .35, .3], 'Head');           // head
-  a.tube('skin', [[-.7, 2, 0], [-1, 1.4, .1], [-1.1, .9, .2]], [.18, .14, .1], 'ArmL'); // arm
-  a.plate('armor', [0, 1.6, .5], [.45, .5, .14], 'Chest', 1, [.1, 0, 0]);               // chest plate
-
-  // Animation: rotation keys per bone; times strictly increase; end at rest for loops.
+  a.joint('root', [0,0,0]);
+  a.joint('body', [0,1.2,0], 'root'); // parents first
+  a.joint('arm', [.5,1.7,0], 'body');
+  // {materials:{skin:{baseColor:'c.jpg',normal:'n.png',roughness:'r.png'}}}
+  // Image paths resolve from manifest; original bytes are embedded unchanged.
+  await a.loadSurfaces('/absolute/textures/materials.json');
+  // Or aliases: await a.loadSurfaces(path, {skin:'bark',armor:'stone'});
+  a.ell('skin', [0,1.2,0], [.5,.8,.4], 'body');
+  a.curve('skin', [[.45,1.7,0],[.8,1.2,.1],[.9,.7,.2]], [.2,.12], 'arm');
   const clip = a.doc.createAnimation('attack');
-  a.channel(clip, 'ArmL', [0, .3, .5, .8, 1.1], [[0,0,0], [-.9,0,0], [1.1,0,.2], [.3,0,0], [0,0,0]]);
-  a.channel(clip, 'Chest', [0, .3, .5, 1.1], [[0,0,0], [0,-.2,0], [0,.25,0], [0,0,0]]);
-
-  return a; // dev runs a.bytes() and writes the GLB for you
+  a.channel(clip, 'arm', [0,.3,.55,.85,1.2],
+    [[0,0,0],[-.8,0,-.3],[1.1,0,.2],[.25,0,0],[0,0,0]]);
+  return a; // dev exports a.bytes()
 }
 ```
 
-## API reference (all of it)
+## API
 
-Conventions: **metres, Y up, +Z forward** (the model faces +Z), Euler/quaternion XYZW, `V = [x,y,z]`.
+`V` means `[number,number,number]`. Methods are on `Asset` unless indicated.
 
-| Call | What it makes |
+| Method | Behavior |
 |---|---|
-| `a.joint(name, at:V, parent?)` | Skeleton joint at world position. Parents first; first joint is the skeleton root. |
-| `a.ell(mat, center:V, radii:V, bone, seed=0, rock=false)` | Ellipsoid. `rock=true` → low-poly faceted boulder with surface warp. |
-| `a.tube(mat, points:V[], radii:number[], bone, sides=7)` | Capped tube along a polyline (limbs, horns, roots, claws). Fewer radii than points interpolates along the path — `[base, tip]` is enough for a taper. For smooth curves, sample a `THREE.CatmullRomCurve3` into ~12–26 points. |
-| `a.plate(mat, center:V, size:V, bone, seed=0, rotation:V=[0,0,0])` | Bevelled, fractured stone slab; local +Z is the exposed face. Vary `seed` per plate. |
-| `a.add(mat, bone, positions:V[], faces:number[][], flat=false, uvs?)` | Raw triangles, outward winding, for anything else. |
-| `a.channel(clip, bone, times:number[], eulers:V[])` | LINEAR rotation keys (radians, XYZ euler). Times strictly increase. |
-| `a.surfaces.set(mat, surface)` | PBR maps for a material name — see skeleton above. Albedo is sRGB; normal/roughness linear; roughness lives in the **G** channel. `tint` and `alphaCutoff` must be within **0..1** (glTF range). |
-| `a.scale(f)` | Uniformly resize the whole asset (geometry + skeleton) at export — the easy fix when the summary `rest.height` is off target. |
-| `a.doc` | The glTF Transform `Document` — use for morphs, custom skin weights, extra material channels. |
-| `await a.bytes()` | Welds, dedups, prunes, **grounds the model at Y=0**, returns GLB bytes. Use a fresh `Asset` per build. |
-| `palette` | Built-in fallback colors by material name: basalt, edge, wood, grain, moss, ivory, eye (emissive), mouth. Unknown names render gray. |
+| `joint(name, at:V, parent?)` | Joint at world position; parents before children. First joint is skin root. |
+| `ell(mat, center:V, radii:V, bone, seed=0, rock=false, rotation:V=[0,0,0], segments?)` | Warped ellipsoid; `rock` gives faceted surfaces. Rotation is around center. Optional `[longitude,latitude]` resolution, default `[18,12]` smooth / `[9,6]` rock. |
+| `plate(mat, center:V, size:V, bone, seed=0, rotation:V=[0,0,0])` | Fractured bevelled slab; local +Z is exposed face. Size gives approximate half-extents. |
+| `tube(mat, points:V[], radii:number[], bone, sides=7)` | Capped polyline tube. `[base,tip]` interpolates taper; one radius gives constant width. |
+| `curve(mat, points:V[], radii:number[], bone, sides=7, segments=16)` | Centripetal Catmull-Rom tube through control points; same taper convention. 2–256 segments. |
+| `add(mat, bone, positions:V[], faces:number[][], flat=false, uvs?)` | Outward triangle faces; optional `[u,v]` per vertex. Smooth geometry retains indices. |
+| `loadSurfaces(manifestPath, aliases?)` | Async PBR loading; defaults to manifest names. Aliases map recipe name → manifest key. Returns asset. |
+| `surfaces.set(mat, surface)` | `{baseColor:Uint8Array, normal?, roughness?, normalScale?, tint?:V, alphaCutoff?}`. Albedo sRGB, other maps linear; roughness G channel. Tint/alpha cutoff 0..1. |
+| `channel(clip, bone, times:number[], eulers:V[])` | LINEAR quaternion rotation tracks; strictly increasing times and matching key counts. |
+| `scale(f)` | Positive uniform resize of geometry, joints and bind poses at export. |
+| `await bytes()` | Export once per fresh asset: weld, deduplicate, prune, ground minimum Y at zero. Exact rigid weights use normalized bytes; indices use bytes up to 256 joints, then ushort. |
+| `doc` | glTF Transform Document for blended weights, morphs or advanced geometry. |
 
-Limits: each convenience shape is rigidly bound to one bone (blended weights need `a.doc` directly). Preview plays the first animation clip only. `import * as T from 'three'` is available for curves and math.
+Fallback palette (exported as `palette`): basalt, edge, wood, grain, moss, ivory, eye (emissive), mouth; unknown names use gray. `import * as T from 'three'` is available. Preview plays the first animation.
 
-## dev command
+For cutout foliage, set a mask after loading: `a.surfaces.get('leaf')!.alphaCutoff=.4`. Opaque materials ignore image alpha.
 
-```sh
-bun run dev -- tmp/creature.ts                         # defaults
-bun run dev -- tmp/creature.ts --size=512              # bigger tiles
-bun run dev -- tmp/creature.ts --views="0,0,front;0,1.57,left;.45,-.6,impact"
-bun run dev -- tmp/creature.glb --no-sheet             # validate an existing GLB only
-```
+Small smooth accents often need only `[10,6]` ellipsoid segments: `a.ell(mat,c,r,bone,seed,false,[0,0,0],[10,6])`. Keep higher resolution on large silhouette forms; inspect the sheet before accepting reduced detail.
 
-- Default sheet: front/left/back at rest + three animation-phase tiles (3×2 grid). `--views` is `time,yaw[,label]` semicolon-separated; yaw 0 = front, π/2 = left, π = back.
-- Summary JSON: `ok`, `glb`, `bytes`, `triangles`, Khronos `errors`/`warnings` (+ first `issues`), `materials`, `textures`, `joints`, `clips`, `rest` (`height`, `size` [x,y,z], `minY`, `heightWithClip`), `sheet.tiles` (with `blank` flags), `ms`.
-- Use `rest.height`/`rest.size` to check dimensions numerically — no measuring scripts needed. `minY` should be 0 (export grounds the model).
-- Exit code 1 and `ok:false` means fix the recipe or validation errors before continuing.
+## Visual decisions
 
-## Quality checklist (judge the sheet against your reference)
+Before detail, estimate reference ratios: shoulder span/body height, head/body height, arm reach, stance width, and depth/lean. Check `rest.height`, `rest.size`, `rest.minY`. Headgear contributes to height; `scale(f)` resizes the entire rig.
 
-- **Silhouette and proportions first** — textures never rescue a weak blockout. Before the first build, note 4-6 proportion landmarks from the reference (shoulder width vs height, head size, arm reach, stance width, posture lean) and build to those numbers; it usually saves a whole revision.
-- **Grounding and connection** — feet planted at Y=0, limbs visually connected to the body, no floating shells; overlap shapes generously, intersections are cheap.
-- **Material regions** — distinct zones (e.g. armor vs hide vs claws) with distinct textures/colors read far better than one noisy material.
-- **Animation** — anticipation → impact → recovery; keep start == end pose; check the phase tiles show real deformation (no `blank: true` tiles).
-- **Scale of detail** — many medium shapes with varied seeds/rotations beat a few giant primitives; asymmetry sells organic forms.
-- Keep Khronos errors at 0; verify the target engine's import rules separately.
+Build large masses, then directional medium forms. Rotate and overlap layered plates; use curved strands with varied thickness instead of disconnected round lumps. Keep face and focal details visible from the reference view. Match material regions before scattered accents. Vary seed, rotation, size and spacing purposefully.
 
-## Pitfalls (each of these has cost an agent a build cycle)
+For armored organic subjects, form the face from angled slabs framing inset eye sockets, rather than a dark ball with eyes on its surface. Let major plates break the silhouette; avoid an even necklace of similar boulders. Concentrate growth on ledges and crevices so the armor beneath remains readable.
 
-- `tint` components above 1 fail validation — glTF clamps baseColorFactor to 0..1. The supplied albedo maps often render darker than painted concept art; that is expected, don't fight it with tint.
-- Write recipes with your file-editing tool, not shell heredocs (quoting eats `$` and backticks).
-- Horns/antlers count toward `rest.height`. If the summary shows you are over target, call `a.scale(f)` instead of scaling joints by hand (joint-level scale won't change the reported bounds).
-- Iterate with `Edit` on the recipe rather than rewriting the file — full rewrites are where typos sneak in.
-- Overlap shapes generously; intersections are free. Gaps at animated joints are what look broken.
+Give moving masses separate joints. Animate anticipation → impact → recovery, use identical start/end rotations, and leave planted feet unrotated unless a step is requested. Inspect phase tiles for gaps, ground penetration and silhouette loss. Check target engine import rules separately from Khronos validity.
 
-## Persistent server (optional, for many fast frames)
+Edit recipes with file tools; shell quoting can corrupt `$` and backticks. Tint cannot exceed 1. Avoid geometry with no visible benefit.
 
-```sh
-bun run preview -- tmp/creature.glb --serve   # prints {pid, url}; also written to tmp/preview-server.json
-```
+## Extra tools
 
-POST `/asset` (GLB bytes), POST `/frame` `{time,yaw,size,format}` → image bytes, POST `/sheet` `{views,tile}` → sheet image, `/analyze` → stats. One renderer serves requests serially. Kill the recorded PID when done. Prefer plain `bun run dev` unless you need many frames per second.
-
-## Housekeeping
-
-`bun run test` and `bun run check` verify the library. Scratch files under `tmp/` are auto-cleaned after 7 days; move deliverables elsewhere. `GLB_CREATOR_TMP` relocates scratch; `GLB_CREATOR_CLEANUP=off` disables cleanup dispatch (useful during measurements).
+`bun run test` / `bun run check` verify the library. `bun run preview -- tmp/model.glb --serve` starts an optional loopback renderer; its printed receipt and `tmp/preview-server.json` give PID/URL. POST `/asset` GLB bytes, `/frame` `{time,yaw,size,format}`, `/sheet` `{views,tile}`, `/analyze` frame options. Requests serialize; stop the recorded PID afterward. Scratch files expire after seven days unless cleanup is disabled. Move final deliverables out of scratch.
