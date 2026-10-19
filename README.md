@@ -10,26 +10,19 @@
 
 *Representative selection: the asset nearest each pipeline's mean quality score, with ties broken by run name. All twelve results are available in the [complete gallery](media/all-runs.png). Individual clips: [Blender CLI](media/blender-attack.webp), [glb-creator v0.1](media/v0.1-attack.webp), [glb-creator v0.2](media/v0.2-attack.webp).*
 
-## One command per revision
+## Install
 
 ```sh
-bun run dev -- tmp/creature.ts
+npx skills add https://github.com/asilvas/skill-glb-creator
 ```
 
-The command builds the recipe, runs the Khronos glTF validator, reports dimensions and asset statistics as one JSON line, and renders a six-view sheet: front, left, back, and three animation phases. Requested previews that fail or produce blank tiles make the command fail, so a valid file cannot silently substitute for a usable visual check.
+Then, from the installed skill folder:
 
-Geometry helpers cover ellipsoids, tapered tubes, curved strands, fractured plates, and raw triangles. Helpers bind shapes to skeleton joints; animation channels add anticipation, impact, and recovery. Supplied PBR images are embedded without changing their bytes.
+```sh
+bun run setup
+```
 
-## What's new in v0.2
-
-Claude created **glb-creator v0.1**, including the one-command workflow and contact sheets. **glb-creator v0.2** adds the optimizations developed and tested in the [Codex demo](https://github.com/asilvas/skill-glb-creator-codex-demo):
-
-- Smooth meshes retain their indices during construction. Exact rigid weights use normalized bytes; joint indices use bytes through 256 joints, then unsigned shorts. This reduces allocation and export size without lossy texture or geometry compression.
-- `loadSurfaces()` reads a PBR manifest with optional material aliases. `curve()` builds tapered Catmull–Rom strands. Ellipsoids accept rotation and optional tessellation for small accents.
-- Grounding handles geometry above or below zero and ignores unreferenced source vertices. Requested preview failures propagate through `dev`.
-- Shorter skill instructions explain the complete API, path handling, material masks, shape layering, and visual iteration. Fifteen library tests cover the original workflow and new behavior.
-
-Existing helper defaults and dependency versions are retained. The same-recipe replay below isolates the library changes from different authoring choices.
+[Bun](https://bun.com/) ≥ 1.4.4 is required. Tested on Windows; the native renderer needs verification on other hosts.
 
 ## Controlled authoring comparison
 
@@ -87,19 +80,26 @@ Seven alternating fresh-process builds per skill used the same recipe, images, g
 
 </details>
 
-## Install
+## One command per revision
 
 ```sh
-npx skills add https://github.com/asilvas/skill-glb-creator
+bun run dev -- tmp/creature.ts
 ```
 
-Then, from the installed skill folder:
+The command builds the recipe, runs the Khronos glTF validator, reports dimensions and asset statistics as one JSON line, and renders a six-view sheet: front, left, back, and three animation phases. Requested previews that fail or produce blank tiles make the command fail, so a valid file cannot silently substitute for a usable visual check.
 
-```sh
-bun run setup
-```
+Geometry helpers cover ellipsoids, tapered tubes, curved strands, fractured plates, and raw triangles. Helpers bind shapes to skeleton joints; animation channels add anticipation, impact, and recovery. Supplied PBR images are embedded without changing their bytes.
 
-[Bun](https://bun.com/) ≥ 1.4.4 is required. Tested on Windows; the native renderer needs verification on other hosts.
+## What's new in v0.2
+
+Claude created **glb-creator v0.1**, including the one-command workflow and contact sheets. **glb-creator v0.2** adds the optimizations developed and tested in the [Codex demo](https://github.com/asilvas/skill-glb-creator-codex-demo):
+
+- Smooth meshes retain their indices during construction. Exact rigid weights use normalized bytes; joint indices use bytes through 256 joints, then unsigned shorts. This reduces allocation and export size without lossy texture or geometry compression.
+- `loadSurfaces()` reads a PBR manifest with optional material aliases. `curve()` builds tapered Catmull–Rom strands. Ellipsoids accept rotation and optional tessellation for small accents.
+- Grounding handles geometry above or below zero and ignores unreferenced source vertices. Requested preview failures propagate through `dev`.
+- Shorter skill instructions explain the complete API, path handling, material masks, shape layering, and visual iteration. Fifteen library tests cover the original workflow and new behavior.
+
+Existing helper defaults and dependency versions are retained. The same-recipe replay below isolates the library changes from different authoring choices.
 
 ## Use
 
