@@ -1,5 +1,13 @@
 export {Asset,palette} from './geometry';
 export type {V,Joint,Surface} from './geometry';
 export {Preview,capturePath} from './preview';
-export type {Frame} from './preview';
+export type {Frame,View,Sheet} from './preview';
 export {validate} from './validate';
+export {generateVariants,parseVariantTarget} from './variants';
+export type {VariantTarget,VariantOptions,VariantStrategy} from './variants';
+export {optimizeVariants} from './optimize';
+export {createReview,serveReview} from './review';
+export type {ReviewModel,ReviewOptions} from './review';
+export {decodeForInspection} from './decode';
+export {createQualityEvaluator,compareQualityFrames,QUALITY_METRIC_VERSION} from './quality-metric';
+export type {QualityImage,QualityObservation,QualityEvaluatorOptions} from './quality-metric';

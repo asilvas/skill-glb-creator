@@ -1,6 +1,59 @@
-# glb-creator
+# glb-creator 2.1.0
 
-**Give your coding agent a 3D art department.** Build textured, rigged, animated GLB assets with Bun and TypeScript. One command builds, validates, measures, and renders a labeled contact sheet for the next revision.
+Build textured, rigged, animated GLB assets with Bun and TypeScript. Preview every animation, compare assets in a local web review, and create delivery variants using measured quality feedback.
+
+## Install and use
+
+```sh
+npx skills add https://github.com/asilvas/skill-glb-creator
+# From the installed skill folder:
+bun run setup
+bun run dev -- tmp/asset.ts
+```
+
+Bun ≥ 1.4.4 is required. The native preview renderer has been exercised on Windows; verify it on other hosts. Blender, model weights, hosted services, and paid APIs are not runtime requirements. See [the skill](skills/glb-creator/SKILL.md) for the authoring API and a complete animated recipe.
+
+## Delivery and review
+
+Keep the highest-quality master unchanged. With no requested sizes, delivery selects exactly one smallest-found tested variant that retains at least 90% of the rendered appearance proxy. Any number of fixed sizes or percentages can instead request the best tested quality within each budget. Each candidate starts from the original master, and the search adapts geometry, texture and coding proposals using actual measurements.
+
+```sh
+bun run dev -- /absolute/master.glb --deliver --delivery-out=/absolute/new-delivery
+bun run optimize -- /absolute/master.glb --out=/absolute/automatic
+bun run variants -- /absolute/master.glb --out=/absolute/budgets --targets=10MB,25MB,25%,50%
+bun run review -- /absolute/master.glb /absolute/automatic/variant-01-auto.glb --out=/absolute/review --serve
+```
+
+The loopback review page includes every embedded animation, rest pose, playback, scrubbing, speed, loop, wireframe, camera orbit, lighting, PNG capture and side-by-side comparison. A manifest can retain fixed perspective PNGs for assets whose local GLBs are missing. Meshopt and WebP decoding are bundled locally; no CDN is used.
+
+The retention score is a proxy relative to the master, **not a human quality rating or a guarantee of 90% perceived quality**. Review the selected result against the preserved master, including focal detail, relighting and every requested clip. Reject visible loss beyond the requested tolerance even when the proxy passes. A bounded search finds the best tested candidates, not a proven global optimum. Explicit tight budgets can fall below the default floor; use `--min-retention=.9` to require both size and retention. Unmet targets and failed trials remain in the receipt.
+
+Read [delivery controls and limits](skills/glb-creator/references/delivery-variants.md) and [web review manifests/API](skills/glb-creator/references/web-review.md).
+
+## Commands and API
+
+| Command | Purpose |
+|---|---|
+| `bun run dev -- <recipe.ts|asset.glb>` | Build, validate, measure and render rest plus all-clip sheets |
+| `bun run dev -- <asset.glb> --no-sheet` | Intentional validation-only inspection |
+| `bun run dev -- <asset.glb> --deliver` | Preserve master and run adaptive delivery search |
+| `bun run variants` / `bun run optimize` | Budgeted variants or one automatic default |
+| `bun run review` | Build and optionally serve a portable local review |
+| `bun run decode` | Create a separate codec-decoded inspection derivative |
+| `bun run preview` / `bun run frame` | Native preview and loopback frame transport |
+| `bun run test` / `bun run check` | Library/feature tests and package/skill checks |
+| `bun run clean` | Inspect or apply scratch cleanup |
+
+Import `@asilvas/glb-creator` or its `/geometry`, `/preview`, `/validate`, `/variants`, `/optimize`, `/review`, `/review-viewer`, `/decode` and `/quality-metric` entry points. The browser viewer is a separate entry point so importing the authoring API does not create a WebGL context. Existing geometry helpers and rigid-joint authoring are preserved. Complex deformation and target-engine acceptance need their own validation.
+
+Recipe paths resolve from the installed skill folder. `GLB_CREATOR_TMP` isolates scratch output; `GLB_CREATOR_CLEANUP=off` retains it. Move final deliverables out of scratch before its seven-day expiry. Original supplied PBR image bytes remain embedded by authoring; delivery transforms run only on separate copies.
+
+## Historical v0.2 evidence
+
+The following benchmark and media describe the earlier v0.2 release. They are retained unchanged as historical evidence and do not measure 2.1.0, the adaptive optimizer, or new quality/productivity/cost improvements.
+
+<details>
+<summary>Historical authoring comparison and same-recipe replay</summary>
 
 ![The reference and representative results from Blender CLI, glb-creator v0.1, and glb-creator v0.2](media/comparison.png)
 
@@ -80,70 +133,7 @@ Seven alternating fresh-process builds per skill used the same recipe, images, g
 
 </details>
 
-## One command per revision
 
-```sh
-bun run dev -- tmp/creature.ts
-```
+</details>
 
-The command builds the recipe, runs the Khronos glTF validator, reports dimensions and asset statistics as one JSON line, and renders a six-view sheet: front, left, back, and three animation phases. Requested previews that fail or produce blank tiles make the command fail, so a valid file cannot silently substitute for a usable visual check.
-
-Geometry helpers cover ellipsoids, tapered tubes, curved strands, fractured plates, and raw triangles. Helpers bind shapes to skeleton joints; animation channels add anticipation, impact, and recovery. Supplied PBR images are embedded without changing their bytes.
-
-## What's new in v0.2
-
-Claude created **glb-creator v0.1**, including the one-command workflow and contact sheets. **glb-creator v0.2** adds the optimizations developed and tested in the [Codex demo](https://github.com/asilvas/skill-glb-creator-codex-demo):
-
-- Smooth meshes retain their indices during construction. Exact rigid weights use normalized bytes; joint indices use bytes through 256 joints, then unsigned shorts. This reduces allocation and export size without lossy texture or geometry compression.
-- `loadSurfaces()` reads a PBR manifest with optional material aliases. `curve()` builds tapered Catmull–Rom strands. Ellipsoids accept rotation and optional tessellation for small accents.
-- Grounding handles geometry above or below zero and ignores unreferenced source vertices. Requested preview failures propagate through `dev`.
-- Shorter skill instructions explain the complete API, path handling, material masks, shape layering, and visual iteration. Fifteen library tests cover the original workflow and new behavior.
-
-Existing helper defaults and dependency versions are retained. The same-recipe replay below isolates the library changes from different authoring choices.
-
-## Use
-
-[skills/glb-creator/SKILL.md](skills/glb-creator/SKILL.md) contains the complete API and working recipe. Save this minimal example as `tmp/creature.ts` inside the installed skill folder:
-
-```ts
-import { Asset } from '../scripts/geometry';
-
-export default async function build() {
-  const a = new Asset();
-  a.joint('Root', [0, 0, 0]);
-  a.joint('ArmL', [-.7, 2, 0], 'Root');
-  // Optionally load prepared images, relative to their manifest:
-  // await a.loadSurfaces('/absolute/textures/materials.json',
-  //   {wood: 'bark', basalt: 'stone'});
-  a.ell('wood', [0, 1.4, 0], [.55, .8, .45], 'Root');
-  a.curve('wood', [[-.5, 2, 0], [-.9, 1.6, .1], [-1.1, .9, .2]],
-    [.18, .1], 'ArmL');
-  a.plate('basalt', [0, 1.6, .5], [.45, .5, .14], 'Root', 1);
-  const clip = a.doc.createAnimation('attack');
-  a.channel(clip, 'ArmL', [0, .3, .55, 1.2],
-    [[0,0,0], [-.9,0,0], [1.1,0,.2], [0,0,0]]);
-  return a;
-}
-```
-
-```sh
-bun run dev -- tmp/creature.ts
-# Writes the GLB, a contact sheet, and one JSON summary line.
-```
-
-Recipe paths resolve from the installed skill folder. Set `GLB_CREATOR_TMP` to isolate job output and `GLB_CREATOR_CLEANUP=off` to retain scratch artifacts. Copy final deliverables out of scratch before its seven-day expiry. Textures are supplied inputs; `loadSurfaces()` or `surfaces.set()` embeds PBR maps. For advanced geometry, `a.doc` exposes the [glTF Transform](https://gltf-transform.dev/) document.
-
-## Commands
-
-| Command | Purpose |
-|---|---|
-| `bun run dev -- <recipe.ts\|asset.glb>` | Build, validate, measure, and render a contact sheet |
-| `bun run dev -- <asset.glb> --no-sheet` | Intentional validation-only inspection |
-| `bun run preview -- <glb> [--serve]` | Render frames or start the loopback preview server |
-| `bun run frame -- <time> [yaw] [size]` | Request a frame from the preview server |
-| `bun run test` / `bun run check` | Library tests and skill metadata checks |
-| `bun run clean` | Inspect or apply scratch cleanup |
-
-Bun programs can import `@asilvas/glb-creator`, including its `/geometry`, `/preview`, and `/validate` entry points. Convenience shapes bind rigidly to one joint; blended weights need the underlying document API. The preview plays the first animation clip, and the native renderer rejects custom shader hooks. Verify your target engine's import rules separately from Khronos validity.
-
-[MIT license](LICENSE).
+[MIT license](LICENSE). Dependencies retain their own licenses and notices.

@@ -19,6 +19,7 @@ if(!input){console.error('Usage: bun run dev -- tmp/asset.ts');process.exit(2);}
 const opt=(name:string)=>args.find(a=>a.startsWith(`--${name}=`))?.split('=').slice(1).join('=');
 const absInput=resolve(ROOT,input),stem=basename(input).replace(/\.(ts|js|glb)$/,'');
 const t0=performance.now();let bytes:Uint8Array;
+const masterPath=absInput.endsWith('.glb')?absInput:resolve(ROOT,opt('out')??resolve(TMP,`${stem}.glb`));
 try{
   if(absInput.endsWith('.glb'))bytes=new Uint8Array(await Bun.file(absInput).arrayBuffer());
   else{
@@ -59,7 +60,7 @@ if(!args.includes('--no-sheet')){
   renderMs=performance.now()-r0;
 }
 
-const summary={
+const summary:any={
   ok:v.errors===0 && !sheetInfo?.error && !(sheetInfo?.tiles?.some((t:any)=>t.blank)),
   glb:absInput.endsWith('.glb')?relative(ROOT,absInput):relative(ROOT,resolve(ROOT,opt('out')??resolve(TMP,`${stem}.glb`))),
   bytes:v.bytes,
@@ -74,5 +75,22 @@ const summary={
   sheet:sheetInfo,
   ms:{build:Math.round(buildMs),validate:Math.round(validateMs),render:Math.round(renderMs)}
 };
+// Draft previews remain fast. Delivery is the explicit acceptance boundary and
+// always packages an untouched master plus quality-guided requested/default output.
+if(args.includes('--deliver')&&summary.ok){
+  const t=performance.now();
+  try{
+    const {generateVariants}=await import('./variants');
+    const delivery=await generateVariants(masterPath,{
+      outDir:resolve(ROOT,opt('delivery-out')??resolve(TMP,`${stem}-delivery-${Date.now()}`)),
+      targets:opt('targets')?.split(',').filter(Boolean),strategy:'auto',
+      minRetention:opt('min-retention')?Number(opt('min-retention')):undefined,
+      maxEvaluations:opt('max-evaluations')?Number(opt('max-evaluations')):undefined,
+      onProgress:event=>console.error(JSON.stringify({stage:'optimize',...event}))
+    });
+    summary.ok=delivery.status==='complete';summary.delivery={ok:summary.ok,master:delivery.master.preservedPath,receipt:resolve(delivery.master.preservedPath,'../variants.json'),variants:delivery.variants.map(v=>({path:v.path,bytes:v.bytes,retention:v.quality.retention,status:v.status,budgetMet:v.budgetMet,qualityAccepted:v.qualityAccepted})),qualityMeaning:delivery.qualityMeaning};
+  }catch(error){summary.ok=false;summary.delivery={ok:false,error:String(error)};}
+  summary.ms.optimize=Math.round(performance.now()-t);
+}
 console.log(JSON.stringify(summary));
 if(!summary.ok)process.exit(1);

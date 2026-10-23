@@ -1,4 +1,4 @@
-import { resolve } from 'node:path';
+import { resolve,dirname } from 'node:path';
 import { ROOT } from './paths';
 // Bun equivalent of skill-creator's quick_validate.py. Repository policy forbids Python tooling.
 const text=await Bun.file(resolve(ROOT,'SKILL.md')).text(),match=text.match(/^---\r?\n([\s\S]*?)\r?\n---/);
@@ -14,4 +14,17 @@ for(const line of text.slice(match[0].length).split(/\r?\n/)){
   if(f){if(!fence)fence=f[1];else if(f[1][0]===fence[0]&&f[1].length>=fence.length&&!f[2].trim())fence=undefined;continue;}
   if(!fence&&/^ {0,3}\[TODO:.*\]\s*$/.test(line))throw Error('Unfinished scaffold');
 }
-console.log('Skill frontmatter, name, description, and scaffold checks pass.');
+const manifest=await Bun.file(resolve(ROOT,'package.json')).json();
+if(typeof manifest.version!=='string'||!/^\d+\.\d+\.\d+$/.test(manifest.version))throw Error('Invalid package version');
+for(const [name,path]of Object.entries(manifest.exports??{})){
+  if(typeof path!=='string'||!path.startsWith('./')||!await Bun.file(resolve(ROOT,path)).exists())throw Error(`Missing package export ${name}`);
+}
+for(const link of text.matchAll(/\]\(([^)]+\.md)\)/g)){
+  if(!await Bun.file(resolve(ROOT,link[1])).exists())throw Error(`Missing skill reference ${link[1]}`);
+}
+const repoManifest=Bun.file(resolve(ROOT,'../../package.json'));
+if(await repoManifest.exists()){
+  const repo=await repoManifest.json();
+  if(repo.name===manifest.name&&(repo.version!==manifest.version||JSON.stringify(repo.dependencies)!==JSON.stringify(manifest.dependencies)))throw Error('Root and installed-skill version/dependencies differ');
+}
+console.log(`Skill/package ${manifest.version} frontmatter, exports, references and consistency checks pass.`);

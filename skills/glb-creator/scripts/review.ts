@@ -1,0 +1,45 @@
+import {mkdirSync,existsSync,readdirSync} from 'node:fs';
+import {resolve,join,dirname,basename,extname,relative,isAbsolute} from 'node:path';
+import {createHash} from 'node:crypto';
+import {assetIO} from './io';
+export type ReviewModel={id?:string;label:string;glb?:string;views?:{label:string;path:string}[];notes?:string[]};
+export type ReviewOptions={title?:string;description?:string;models:ReviewModel[];outDir:string};
+const esc=(s:any)=>String(s??'').replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('"','&quot;');
+/** Copies a portable local review bundle; source masters and variants stay unchanged. */
+export async function createReview(options:ReviewOptions){
+  if(!options.models.length)throw Error('At least one asset or retained-view entry required');
+  const out=resolve(options.outDir);if(existsSync(out)&&readdirSync(out).length)throw Error('Use a new review folder or an empty folder to preserve all existing sources and artifacts');
+  mkdirSync(join(out,'assets'),{recursive:true});const io=await assetIO(),models=[];
+  for(const [index,model] of options.models.entries()){
+    const id=`asset-${String(index+1).padStart(2,'0')}`,glb=model.glb?resolve(model.glb):null,available=!!glb&&await Bun.file(glb).exists(),views=[];
+    let bytes:number|null=null,sha256:string|null=null,clips:{name:string;duration:number}[]=[],error:string|null=null;
+    if(available&&glb){const data=new Uint8Array(await Bun.file(glb).arrayBuffer());bytes=data.length;sha256=createHash('sha256').update(data).digest('hex');await Bun.write(join(out,'assets',`${id}.glb`),data);try{const doc=await io.readBinary(data);clips=doc.getRoot().listAnimations().map((a,i)=>({name:a.getName()||`Clip ${i+1}`,duration:Math.max(0,...a.listSamplers().map(s=>{const t=s.getInput()?.getArray();return t?.length?Number(t[t.length-1]):0;}))}));}catch(e){error=String(e);}}
+    for(const [i,v] of (model.views??[]).entries()){if(!await Bun.file(resolve(v.path)).exists())continue;const ext=extname(v.path).toLowerCase();if(!['.png','.jpg','.jpeg','.webp'].includes(ext))throw Error('Fixed views must be raster images');const url=`assets/${id}-view-${i+1}${ext}`;await Bun.write(join(out,url),await Bun.file(resolve(v.path)).arrayBuffer());views.push({label:v.label,url});}
+    models.push({id,sourceId:model.id??id,label:model.label,available,url:available?`assets/${id}.glb`:null,bytes,sha256,clips,views,notes:[...(model.notes??[]),...(error?[`Metadata inspection failed: ${error}`]:[])]});
+  }
+  const config={schemaVersion:1,title:options.title??'Asset review',description:options.description??'Inspect the master and delivery variants, fixed views, material response and every animation clip.',models};
+  await Bun.write(join(out,'review.json'),JSON.stringify(config,null,2));
+  const built=await Bun.build({entrypoints:[join(import.meta.dir,'review-client.ts')],outdir:out,naming:'review.js',target:'browser',format:'iife',minify:true});if(!built.success)throw Error(built.logs.map(String).join('\n'));
+  const html=`<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${esc(config.title)}</title><style>
+:root{color-scheme:dark}*{box-sizing:border-box}body{margin:0;background:#131a19;color:#edf0e8;font:16px/1.6 system-ui,sans-serif}main{max-width:1440px;margin:auto;padding:36px 28px 70px}header{display:grid;grid-template-columns:1.3fr 1fr;gap:40px;padding-bottom:32px}h1{font:500 clamp(40px,5vw,70px)/1.1 Georgia,serif;letter-spacing:-1px;margin:12px 0 20px}h2{font:500 32px/1.2 Georgia,serif}.eyebrow{font-size:12px;color:#dfbd7d;letter-spacing:2px;text-transform:uppercase}p,li,figcaption{color:#b9c4b9}section{border-top:1px solid #3c4b43;padding:32px 0}.controls{display:flex;gap:14px;align-items:center;flex-wrap:wrap;background:#1d2724;padding:18px;border-radius:10px}select,button,input::file-selector-button{font:inherit;color:#edf0e8;background:#304637;border:1px solid #69836a;border-radius:6px;padding:8px 12px}button{cursor:pointer}button:disabled{opacity:.5;cursor:default}a{color:#b9d697}#asset-facts,.note{font-size:13px}.viewer{height:650px;border:1px solid #3c4b43;border-radius:10px;overflow:hidden}.views{display:grid;grid-template-columns:repeat(4,1fr);gap:14px}.views img{width:100%;border-radius:8px;background:#555}figure{margin:0}figcaption{padding:6px 0;font-size:13px}.compare-toolbar{display:flex;justify-content:space-between;align-items:center}.card{background:#1d2724;border-left:3px solid #dfbd7d;padding:18px 24px}#comparison[hidden]{display:none}@media(max-width:800px){main{padding:24px 16px}header{grid-template-columns:1fr}.views{grid-template-columns:repeat(2,1fr)}.viewer{height:550px}}
+.viewer:empty{display:none}
+</style><main><header><div><div class="eyebrow">glb-creator / local asset review</div><h1>${esc(config.title)}</h1><p>${esc(config.description)}</p></div><div class="card"><strong>Inspect the actual deliverable.</strong><p>Choose any clip, pause at contact or an extreme pose, scrub the full timeline, vary light and inspect the wireframe. The camera stays fixed until Fit pose.</p><p class="note">Camera orbit is an inspection motion. Finite views and a valid file do not establish animation, material or game-engine acceptance.</p></div></header>
+<div class="controls"><label>Asset <select id="asset-select" aria-label="Choose asset"></select></label><button id="load-asset">Load selected GLB</button><label>Open local GLB <input id="local-file" type="file" accept=".glb,model/gltf-binary" style="max-width:260px"></label></div><p id="asset-facts"></p><ul id="asset-notes"></ul>
+<section><h2 id="loaded-label">Interactive review</h2><div id="main-viewer" class="viewer"></div><p class="note">PBR studio lighting is shared across assets. No external network decoder or CDN is used. For saved files, start the local review server or open a GLB using the file selector.</p><div class="controls"><label>Compare <select id="compare-select" aria-label="Choose comparison asset"></select></label><button id="load-compare">Load comparison below</button><span id="compare-status" class="note"></span></div><div id="comparison" hidden><div class="compare-toolbar"><h2 id="compare-label">Comparison asset</h2><button id="close-compare">Close comparison</button></div><div id="other-viewer" class="viewer"></div></div></section>
+<section><h2>Retained fixed perspectives</h2><p>Use the same four cameras across master and variants for a fair comparison. These PNGs remain useful when a locally generated GLB is unavailable.</p><div id="fixed-views" class="views"></div></section><section><a href="review.json">Asset metadata and hashes</a></section></main><script id="review-data" type="application/json">${JSON.stringify(config).replaceAll('<','\\u003c')}</script><script src="review.js"></script></html>`;
+  await Bun.write(join(out,'review.html'),html);return{ok:true,reviewDir:out,html:join(out,'review.html'),models:models.map(m=>({id:m.id,available:m.available,bytes:m.bytes,clips:m.clips.length,views:m.views.length}))};
+}
+export function serveReview(reviewDir:string,port=0){
+  const root=resolve(reviewDir);if(!Number.isInteger(port)||port<0||port>65535)throw Error('Invalid loopback port');
+  return Bun.serve({hostname:'127.0.0.1',port,async fetch(req){try{const url=new URL(req.url),file=resolve(root,'.'+decodeURIComponent(url.pathname==='/'?'/review.html':url.pathname)),rel=relative(root,file);if(!rel||isAbsolute(rel)||rel.startsWith('..')||rel.split(/[\\/]/).some(p=>p.startsWith('.')))return new Response('Not found',{status:404});const data=Bun.file(file);if(!await data.exists())return new Response('Not available locally',{status:404});return new Response(data,{headers:{'Cache-Control':'no-store'}});}catch{return new Response('Bad request',{status:400});}}});
+}
+if(import.meta.main){
+  const args=process.argv.slice(2),opt=(name:string)=>args.find(a=>a.startsWith(`--${name}=`))?.slice(name.length+3),inputs=args.filter(a=>!a.startsWith('--'));
+  const manifest=opt('manifest');let config:any;
+  if(manifest){const base=dirname(resolve(manifest));config=await Bun.file(resolve(manifest)).json();config.models=config.models.map(m=>({...m,glb:m.glb?resolve(base,m.glb):undefined,views:m.views?.map(v=>({...v,path:resolve(base,v.path)}))}));}
+  else config={models:inputs.map(path=>({label:basename(path,'.glb'),glb:resolve(path)}))};
+  if(!config.models?.length||!opt('out'))throw Error('Usage: bun run review -- master.glb [variant.glb ...] --out=FOLDER [--serve] or --manifest=review-spec.json');
+  const result=await createReview({...config,title:opt('title')??config.title,outDir:resolve(opt('out')!)});
+  if(args.includes('--serve')){const server=serveReview(result.reviewDir,Number(opt('port')??0));const receipt={...result,pid:process.pid,url:`http://127.0.0.1:${server.port}/review.html`};await Bun.write(join(result.reviewDir,'review-server.json'),JSON.stringify(receipt,null,2));console.log(JSON.stringify(receipt));process.on('SIGINT',()=>{server.stop(true);process.exit(0);});}
+  else console.log(JSON.stringify(result));
+}

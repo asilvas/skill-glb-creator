@@ -4,8 +4,8 @@ import { mkdirSync } from 'node:fs';
 import { resolve,dirname,relative,isAbsolute } from 'node:path';
 import { ROOT,TMP } from './paths';
 import { scheduleCleanup } from './cleanup';
-export type Frame={time?:number,yaw?:number,size?:number,format?:'png'|'jpeg'|'webp'|'rgba',capture?:string,analyze?:boolean,framing?:'clip'|'pose'};
-export type View={time?:number,yaw?:number,label?:string,framing?:'clip'|'pose'};
+export type Frame={time?:number,yaw?:number,size?:number,format?:'png'|'jpeg'|'webp'|'rgba',capture?:string,analyze?:boolean,framing?:'clip'|'pose',clip?:string|number|false};
+export type View={time?:number,yaw?:number,label?:string,framing?:'clip'|'pose',clip?:string|number|false};
 export type Sheet={views?:View[],tile?:number,format?:'webp'|'png',capture?:string};
 export function capturePath(path:string){
   const target=resolve(TMP,path),rel=relative(TMP,target);
@@ -18,6 +18,8 @@ export class Preview {
   asset:any;mixer:any;action:any;renderer:any;size=512;
   renderRGBA?: (size:number)=>Promise<Uint8Array>;
   bounds=new T.Box3();restBounds=new T.Box3();clips:{name:string,duration:number}[]=[];
+  animations:T.AnimationClip[]=[];
+  selectedClip:number|false=false;
   constructor(){this.scene.background=new T.Color(.55,.51,.43);
     this.scene.add(new T.HemisphereLight(0xffffff,0x554a35,1.2));
     for(const [pos,power,color] of [[[4,8,6],3,0xffe3bd],[[-4,4,2],1.5,0xe1ebff],[[0,6,-4],2,0xffffff]] as const){const l=new T.DirectionalLight(color,power);l.position.set(...pos);if(pos[0]===4){l.castShadow=true;l.shadow.mapSize.set(2048,2048);Object.assign(l.shadow.camera,{left:-5,right:5,top:6,bottom:-5,near:.1,far:30});l.shadow.bias=-.0003;l.shadow.normalBias=.01;}this.scene.add(l);}
@@ -33,44 +35,63 @@ export class Preview {
     // memory. Stock Three's browser Image loader cannot do this under Bun.
     const {createNodeGltfLoader}=await import('@headless-three/renderer');
     const {loader}=await createNodeGltfLoader(TMP);
+    const header=new TextDecoder().decode(bytes.subarray(20,20+new DataView(bytes.buffer,bytes.byteOffset,bytes.byteLength).getUint32(12,true)));
+    if(header.includes('EXT_meshopt_compression')){const {MeshoptDecoder}=await import('meshoptimizer/decoder');await MeshoptDecoder.ready;loader.setMeshoptDecoder(MeshoptDecoder);}
     const gltf:any=await new Promise((resolve,reject)=>loader.parse(bytes.slice().buffer,'',resolve,reject));
-    this.releaseAsset();this.asset=gltf.scene;this.scene.add(this.asset);
+    this.releaseAsset();this.asset=gltf.scene;this.animations=gltf.animations;this.scene.add(this.asset);
     this.asset.traverse((o:any)=>{if(o.isMesh){o.castShadow=true;o.receiveShadow=true;}});
     this.mixer=new T.AnimationMixer(this.asset);
-    if(gltf.animations.length){this.action=this.mixer.clipAction(gltf.animations[0]);this.action.play();}
-    // Freeze a union across the clip; a windup must not disappear beyond a rest-pose camera.
-    // Recompute only on asset load, not on each preview frame.
-    this.bounds.makeEmpty();this.restBounds.makeEmpty();const duration=gltf.animations[0]?.duration??0;
-    for(let i=0;i<17;i++){
-      this.mixer.setTime(duration*i/16);this.asset.updateMatrixWorld(true);
+    // Freeze one common camera union over rest and EVERY clip. Finite sampling
+    // is inspection evidence, not proof that every possible pose is inside it.
+    this.asset.updateMatrixWorld(true);
+    this.restBounds.setFromObject(this.asset,true);this.bounds.copy(this.restBounds);
+    for(let clip=0;clip<this.animations.length;clip++){
+      this.setClip(clip);const duration=this.animations[clip].duration;
+      for(let i=0;i<17;i++){
+      this.applyPose(duration*i/16);this.asset.updateMatrixWorld(true);
       this.asset.traverse((m:any)=>{if(m.isSkinnedMesh)m.skeleton.update();});
       const box=new T.Box3().setFromObject(this.asset,true);
-      if(i===0)this.restBounds.copy(box);
       this.bounds.union(box);
+      }
     }
     if(this.bounds.isEmpty())throw Error('Asset contains no renderable geometry');
-    this.mixer.setTime(0);this.asset.updateMatrixWorld(true);
+    this.setClip(this.animations.length?0:false);this.applyPose(0);this.asset.updateMatrixWorld(true);
     scheduleCleanup();
     this.clips=gltf.animations.map((a:any)=>({name:a.name,duration:a.duration}));
     return {clips:this.clips,nodes:this.asset.children.length};
+  }
+  /** Select a named/indexed clip or false for the original bind/rest state. */
+  setClip(clip:string|number|false){
+    const index=typeof clip==='string'?this.animations.findIndex(a=>a.name===clip):clip;
+    if(index!==false&&(!Number.isInteger(index)||index<0||index>=this.animations.length))throw Error(`Unknown animation ${clip}`);
+    if(this.selectedClip===index&&this.action)return;
+    this.mixer.stopAllAction();this.action=undefined;this.selectedClip=index;
+    if(index!==false){this.action=this.mixer.clipAction(this.animations[index]);this.applyPose(0);}
+  }
+  /** Absolute, non-wrapping sampling includes the true endpoint of non-looping clips. */
+  applyPose(time:number){
+    if(!Number.isFinite(time)||time<0)throw Error('Invalid animation time');
+    if(this.action){this.action.reset().setLoop(T.LoopOnce,1);this.action.clampWhenFinished=true;this.action.play();this.action.paused=true;this.action.time=Math.min(time,this.action.getClip().duration);}
+    this.mixer.update(0);
   }
   releaseAsset(){
     if(!this.asset)return;this.mixer?.stopAllAction();this.mixer?.uncacheRoot(this.asset);this.scene.remove(this.asset);
     const textures=new Set<any>(),materials=new Set<any>(),geometries=new Set<any>();
     this.asset.traverse((o:any)=>{if(o.geometry)geometries.add(o.geometry);for(const m of Array.isArray(o.material)?o.material:o.material?[o.material]:[]){materials.add(m);for(const v of Object.values(m))if((v as any)?.isTexture)textures.add(v);}});
-    for(const t of textures)t.dispose();for(const m of materials)m.dispose();for(const g of geometries)g.dispose();this.asset=null;
+    for(const t of textures)t.dispose();for(const m of materials)m.dispose();for(const g of geometries)g.dispose();this.asset=null;this.animations=[];this.clips=[];this.selectedClip=false;this.action=undefined;
   }
   async frame(options:Frame={}){
     if(!this.asset)throw Error('Load an asset first');
     const size=options.size??512,time=options.time??0,yaw=options.yaw??Math.atan2(6,10);
     if(!Number.isInteger(size)||size<32||size>2048||!Number.isFinite(time)||time<0||!Number.isFinite(yaw))throw Error('Invalid frame parameters');
     const capture=options.capture?capturePath(options.capture):undefined;
-    const start=performance.now();this.mixer.setTime(time);this.asset.updateMatrixWorld(true);
+    if(options.clip!==undefined)this.setClip(options.clip);
+    const start=performance.now();this.applyPose(time);this.asset.updateMatrixWorld(true);
     if(!this.renderRGBA)this.scene.traverse((o:any)=>{
       for(const m of Array.isArray(o.material)?o.material:o.material?[o.material]:[]){
         // Bun strips comments from Three's empty prototype hook. Native 0.4.5 compares
         // its source to a literal containing that comment. Preserve all real hooks.
-        if(m.onBeforeCompile===T.Material.prototype.onBeforeCompile)m.onBeforeCompile=undefined;
+        if(typeof m.onBeforeCompile==='function'&&/^[^{]*\{\s*\}\s*$/.test(String(m.onBeforeCompile).replace(/\/\*[\s\S]*?\*\//g,'')))m.onBeforeCompile=undefined;
       }
     });
     this.asset.traverse((m:any)=>{if(m.isSkinnedMesh)m.skeleton.update();});
@@ -99,10 +120,9 @@ export class Preview {
   }
   /** Standard inspection views: silhouette from three sides plus animation phases. */
   defaultViews():View[]{
-    const d=this.clips[0]?.duration??0;
-    const base:View[]=[{time:0,yaw:0,label:'front'},{time:0,yaw:Math.PI/2,label:'left'},{time:0,yaw:Math.PI,label:'back'}];
-    if(!d)return [...base,{time:0,yaw:-Math.PI/4,label:'3/4'}];
-    return [...base,...[.3,.55,.85].map(f=>({time:Math.round(d*f*100)/100,yaw:-.6,label:`t=${(d*f).toFixed(2)}s`}))];
+    const base:View[]=[{time:0,yaw:0,label:'front',clip:false},{time:0,yaw:Math.PI/2,label:'left',clip:false},{time:0,yaw:Math.PI,label:'back',clip:false}];
+    if(!this.clips.length)return [...base,{time:0,yaw:-Math.PI/4,label:'3/4'}];
+    return [...base,...this.clips.flatMap((c,clip)=>[.3,.55,.85].map(f=>({clip,time:Math.round(c.duration*f*100)/100,yaw:-.6,label:`${this.clips.length>1?c.name+' ':''}t=${(c.duration*f).toFixed(2)}s`})) )];
   }
   /** One labeled grid image covering several poses/angles: a whole revision review in a single image read. */
   async sheet(options:Sheet={}){
@@ -111,7 +131,7 @@ export class Preview {
     const cols=views.length<=4?2:3,rows=Math.ceil(views.length/cols);
     const cells:{pixels:Uint8Array,view:View,stdev:number}[]=[];
     for(const view of views){
-      const f=await this.frame({time:view.time,yaw:view.yaw,size:tile,format:'rgba',framing:view.framing});
+      const f=await this.frame({time:view.time,yaw:view.yaw,size:tile,format:'rgba',framing:view.framing,clip:view.clip});
       const s=await sharp(f.bytes,{raw:{width:tile,height:tile,channels:4}}).stats();
       cells.push({pixels:f.bytes,view,stdev:Math.max(...s.channels.slice(0,3).map(c=>c.stdev))});
     }

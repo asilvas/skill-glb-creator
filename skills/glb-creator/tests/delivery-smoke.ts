@@ -1,0 +1,24 @@
+/** Manual native smoke: run only when the caller owns its renderer/GPU queue. */
+import {Asset} from '../scripts/geometry';
+import {Preview} from '../scripts/preview';
+import {generateVariants} from '../scripts/variants';
+import {createReview} from '../scripts/review';
+import {validate} from '../scripts/validate';
+import sharp from 'sharp';
+import {resolve,join} from 'node:path';
+import {mkdirSync,existsSync} from 'node:fs';
+import {createHash} from 'node:crypto';
+const need=(v:unknown,m:string):asserts v=>{if(!v)throw Error(m);},hash=(v:Uint8Array)=>createHash('sha256').update(v).digest('hex');
+const argument=process.argv.find(v=>v.startsWith('--out=')),out=resolve(argument?.slice(6)??'tmp/delivery-smoke-'+Date.now());need(!existsSync(out),'Fresh smoke directory');mkdirSync(out,{recursive:true});process.env.GLB_CREATOR_CLEANUP='off';
+const receipt:any={schemaVersion:1,status:'starting-production-feature-smoke',quality:null,performanceClaim:false,output:out};const start=performance.now();let preview:Preview|undefined;
+try{
+ const a=new Asset();a.joint('root',[0,0,0]);a.joint('arm',[.4,1,0],'root');const rgba=new Uint8Array(64*64*4);for(let y=0;y<64;y++)for(let x=0;x<64;x++){const odd=(Math.floor(x/8)+Math.floor(y/8))%2;rgba.set(odd?[161,81,31,255]:[54,105,145,255],(y*64+x)*4);}a.surfaces.set('paint',{baseColor:await sharp(rgba,{raw:{width:64,height:64,channels:4}}).png().toBuffer()});a.ell('paint',[0,.85,0],[.4,.8,.3],'root',0,false,[0,0,0],[12,8]);a.curve('paint',[[.4,1,0],[.75,1.1,.1],[1,1,.1]],[.12,.08],'arm',7,8);
+ for(const [name,angle,duration]of [['idle',.12,1],['wave',.9,1.3],['reach',-.7,.8]] as const){const c=a.doc.createAnimation(name);a.channel(c,'arm',[0,duration/2,duration],[[0,0,0],[0,0,angle],[0,0,0]]);}
+ const bytes=await a.bytes(),master=join(out,'master.glb'),digest=hash(bytes);await Bun.write(master,bytes);const masterValidation=await validate(bytes);need(masterValidation.errors===0,'Valid smoke master');receipt.master={path:master,bytes:bytes.length,sha256:digest,clips:masterValidation.clips.map(c=>c.name)};
+ preview=await Preview.create();await preview.load(bytes);const sheet=await preview.sheet({tile:96});await Bun.write(join(out,'all-clips.webp'),sheet.bytes);need(sheet.tiles.length===12&&sheet.tiles.every(t=>!t.blank),'Three clips must all appear in actual nonblank sheet');receipt.sheet={path:join(out,'all-clips.webp'),tiles:sheet.tiles};await preview.dispose();preview=undefined;
+ const options={maxEvaluations:4,qualityOptions:{size:64,maxAnimationSamples:3}};
+ const automatic=await generateVariants(master,{...options,outDir:join(out,'automatic')});need(automatic.variants.length===1&&automatic.variants[0].quality.retention>=.9&&automatic.variants[0].qualityAccepted,'One automatic >=90% proxy variant');
+ const budgeted=await generateVariants(master,{...options,outDir:join(out,'budgeted'),targets:['10MB','25MB','25%','50%']});need(budgeted.variants.length===4&&budgeted.strategy==='auto','All fixed/percentage budgets use adaptive search');for(const v of[...automatic.variants,...budgeted.variants]){const inspection=await validate(await Bun.file(v.path).bytes());need(inspection.errors===0&&JSON.stringify(inspection.clips.map(c=>c.name))===JSON.stringify(receipt.master.clips),'Selected variants preserve all clips');}
+ need(hash(await Bun.file(master).bytes())===digest,'Source master remains immutable');const views=[];preview=await Preview.create();for(const [label,path]of[['Master',master],['Automatic',automatic.variants[0].path]] as const){await preview.load(await Bun.file(path).bytes());const fixed=[];for(const [index,yaw]of[-Math.PI/4,Math.PI/4,3*Math.PI/4,5*Math.PI/4].entries()){const image=join(out,label.toLowerCase()+'-view-'+(index+1)+'.png'),frame=await preview.frame({clip:false,time:0,yaw,size:192,format:'png'});await Bun.write(image,frame.bytes);fixed.push({label:'Fixed perspective '+(index+1),path:image});}views.push({label,glb:path,views:fixed});}await preview.dispose();preview=undefined;
+ const review=await createReview({title:'2.1.0 functional delivery smoke',description:'Procedural implementation fixture, awaiting visual review. Proxy retention is not a quality rating.',outDir:join(out,'review'),models:views});need(review.models.every(m=>m.available&&m.clips===3&&m.views===4),'Review retains complete clip and fixed-view inventories');receipt.status='functional-smoke-completed-awaiting-visual-review';receipt.automatic=automatic.variants;receipt.budgeted=budgeted.variants;receipt.review=review;receipt.perceptualAcceptance='pending-independent-visual-review';
+}catch(error){receipt.status='retained-functional-smoke-failure';receipt.error=String(error);throw error;}finally{await preview?.dispose();receipt.seconds=(performance.now()-start)/1000;await Bun.write(join(out,'smoke.json'),JSON.stringify(receipt,null,2));console.log(JSON.stringify({status:receipt.status,receipt:join(out,'smoke.json'),review:receipt.review?.html}));}

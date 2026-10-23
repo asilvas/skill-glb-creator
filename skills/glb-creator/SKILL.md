@@ -1,26 +1,25 @@
 ---
 name: glb-creator
-description: Create textured, rigged, animated 3D GLB assets procedurally with Bun — no Blender. One command builds, validates, and renders a labeled multi-view contact sheet for fast visual iteration. Use for 3D asset authoring, iteration, and inspection.
+description: Create textured, rigged, animated GLB assets with Bun, inspect every clip, optimize delivery with rendered quality feedback, and build local web reviews. Use for procedural 3D authoring, previews, variants and asset inspection.
 ---
 
-# glb-creator
+# glb-creator 2.1
 
-Write a recipe, run `dev`, view the sheet, edit. The API below is sufficient for ordinary assets; inspect implementation only to diagnose a blocking error. Run `bun run setup` in this folder once if dependencies are missing.
+Read [DESIGN.md](DESIGN.md) for quality, complete-delivery time and token/cost priorities. Write a recipe, run `dev`, view the sheet, then revise. Run `bun run setup` in this folder if dependencies are missing. Blender and learned models are not runtime requirements.
+
+Use the supplied reference to establish proportions, pose, material regions and focal details. A single view leaves hidden surfaces ambiguous; keep them coherent and disclose consequential inference. The packaged helpers are procedural tools, not a promised automatic replica pipeline. Inspect actual geometry, materials and requested animations before treating a master as finished.
 
 ## Build and inspect
 
 ```sh
 bun run dev -- tmp/asset.ts
-bun run dev -- tmp/asset.ts --size=512
-bun run dev -- tmp/asset.ts --out=/absolute/model.glb --sheet=sheet.webp
-bun run dev -- tmp/model.glb --no-sheet
+bun run dev -- tmp/asset.ts --out=/absolute/master.glb --sheet=sheet.webp
+bun run dev -- /absolute/master.glb --no-sheet
 ```
 
-Recipe paths and `--out` resolve from the skill folder. Sheets resolve within `GLB_CREATOR_TMP` (default skill `tmp/`). Set that variable to your output folder for isolated jobs; set `GLB_CREATOR_CLEANUP=off` to retain benchmark artifacts. PowerShell: `$env:GLB_CREATOR_TMP='C:/path/to/output'`.
+Recipe paths and `--out` resolve from the skill folder. Sheets resolve within `GLB_CREATOR_TMP` (default skill `tmp/`). Set that variable to isolate a job; use `GLB_CREATOR_CLEANUP=off` to retain scratch evidence. Move final deliverables out of scratch before its seven-day expiry.
 
-`dev` writes the GLB and prints one JSON line: `ok`, paths, bytes, triangles, Khronos errors/warnings/issues, materials, texture/joint counts, clips, `rest` dimensions, sheet tile/blank flags, and build/validate/render milliseconds. **View the sheet image**; a validator cannot judge appearance. Failed renders or blank tiles fail `dev`. Use `--no-sheet` for intentional validation-only work. Never print image base64 or GLB bytes.
-
-Default sheet: front/left/back at rest, then 30%/55%/85% of the first animation, with camera framing frozen across the clip. Override with `--views="0,0,front;0,1.57,left;.5,-.6,impact"` (time seconds, yaw radians, label).
+`dev` prints one JSON summary with validity, size, triangles, dimensions, joints, clips, sheet flags and component timings. **View the sheet image**; validity cannot judge appearance. Failed renders and blank tiles fail the command. `--no-sheet` is intentional validation-only work. Default sheets show three rest directions and30%/55%/85% of every clip, with one framing envelope. No clip is silently omitted. Use `Preview.setClip(name|index|false)` or `frame({clip,time})` for other key/contact/extreme times and true endpoints. Finite samples do not prove motion correctness.
 
 ## Recipe
 
@@ -66,24 +65,33 @@ export default async function build() {
 | `await bytes()` | Export once per fresh asset: weld, deduplicate, prune, ground minimum Y at zero. Exact rigid weights use normalized bytes; indices use bytes up to 256 joints, then ushort. |
 | `doc` | glTF Transform Document for blended weights, morphs or advanced geometry. |
 
-Fallback palette (exported as `palette`): basalt, edge, wood, grain, moss, ivory, eye (emissive), mouth; unknown names use gray. `import * as T from 'three'` is available. Preview plays the first animation.
+Fallback palette (exported as `palette`): basalt, edge, wood, grain, moss, ivory, eye (emissive), mouth; unknown names use gray. `import * as T from 'three'` is available. Preview initially plays the first animation; `setClip(name|index|false)` or `frame({clip,time})` selects another or the original rest state.
 
 For cutout foliage, set a mask after loading: `a.surfaces.get('leaf')!.alphaCutoff=.4`. Opaque materials ignore image alpha.
 
 Small smooth accents often need only `[10,6]` ellipsoid segments: `a.ell(mat,c,r,bone,seed,false,[0,0,0],[10,6])`. Keep higher resolution on large silhouette forms; inspect the sheet before accepting reduced detail.
 
-## Visual decisions
 
-Before detail, estimate reference ratios: shoulder span/body height, head/body height, arm reach, stance width, and depth/lean. Check `rest.height`, `rest.size`, `rest.minY`. Headgear contributes to height; `scale(f)` resizes the entire rig.
+## Delivery variants
 
-Build large masses, then directional medium forms. Rotate and overlap layered plates; use curved strands with varied thickness instead of disconnected round lumps. Keep face and focal details visible from the reference view. Match material regions before scattered accents. Vary seed, rotation, size and spacing purposefully.
+Create and visually accept the master first, then run delivery. Preserve its original bytes. With no requested sizes, the final step chooses one smallest-found tested variant retaining at least90% of the rendered appearance proxy. Any number of fixed sizes or percentages instead choose the highest measured retention within each budget; percentages always refer to the original master.
 
-For armored organic subjects, form the face from angled slabs framing inset eye sockets, rather than a dark ball with eyes on its surface. Let major plates break the silhouette; avoid an even necklace of similar boulders. Concentrate growth on ledges and crevices so the armor beneath remains readable.
+```sh
+bun run dev -- /absolute/master.glb --deliver --delivery-out=/absolute/new-delivery
+bun run optimize -- /absolute/master.glb --out=/absolute/automatic
+bun run variants -- /absolute/master.glb --out=/absolute/variants --targets=10MB,25MB,25%,50%
+```
 
-Give moving masses separate joints. Animate anticipation → impact → recovery, use identical start/end rotations, and leave planted feet unrotated unless a step is requested. Inspect phase tiles for gaps, ground penetration and silhouette loss. Check target engine import rules separately from Khronos validity.
+All production variants use bounded adaptive quality search. Invalid, blank or failed evaluations are excluded, and every attempted candidate remains in the receipt. The result is the best tested selection, not a proven global minimum. Explicit tight budgets can fall below90%; use `--min-retention=.9` for a hard floor and inspect unmet targets.
 
-Edit recipes with file tools; shell quoting can corrupt `$` and backticks. Tint cannot exceed 1. Avoid geometry with no visible benefit.
+**The proxy is not perceived quality.** Compare the selected delivery against its preserved master in matched views, focal detail, relighting and every requested clip. Reject a default with more than10% judged perceived loss even if the proxy passes; retry conservatively in a fresh folder or use a verified lossless fallback. Deliver one accepted default alongside the master. Verify target-engine import/deformation separately. Read [delivery variants](references/delivery-variants.md) for API, controls, receipts and codec limits.
 
-## Extra tools
+## Local web review
 
-`bun run test` / `bun run check` verify the library. `bun run preview -- tmp/model.glb --serve` starts an optional loopback renderer; its printed receipt and `tmp/preview-server.json` give PID/URL. POST `/asset` GLB bytes, `/frame` `{time,yaw,size,format}`, `/sheet` `{views,tile}`, `/analyze` frame options. Requests serialize; stop the recorded PID afterward. Scratch files expire after seven days unless cleanup is disabled. Move final deliverables out of scratch.
+```sh
+bun run review -- /absolute/master.glb /absolute/variant.glb --out=/absolute/review --serve
+```
+
+Open the printed loopback URL. The viewer supports every clip, play/pause, scrubbing, rest, loop/speed, wireframe, lighting, orbit, PNG capture and comparison. A manifest adds shared fixed perspective PNGs and unavailable historical entries. Clip selection never modifies the GLB. Meshopt and WebP are bundled without a CDN; other codecs may need a separately supported inspection derivative. Read [web review](references/web-review.md) for manifests and the browser API.
+
+`bun run test` verifies library and feature behavior, including native preview tests. `bun run check` checks package/skill consistency. Use `bun run preview -- model.glb --serve` for optional loopback frame transport and stop its recorded PID afterward. Never print GLB or image base64 into agent context.
